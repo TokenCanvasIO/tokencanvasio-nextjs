@@ -53,7 +53,7 @@ const FaqXRP = () => {
 
       <PolicySection title="Who handles my payment? Why does checkout show another brand?">
         <p>
-          XRP MemeCoins is powered by the team at <strong>TokenCanvasIO</strong>. To ensure the highest level of security, we use their centralized system to process all subscriptions.
+          XRPMemeCoins.com is powered by the team at <strong>TokenCanvasIO</strong>. To ensure the highest level of security, we use their centralized system to process all subscriptions.
         </p>
         <p>
           When you subscribe, you will be redirected to the secure TokenCanvasIO checkout page to complete your payment. This is the official and secure payment gateway for our service.
