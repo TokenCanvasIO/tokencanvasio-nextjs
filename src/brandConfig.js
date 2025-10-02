@@ -1,4 +1,5 @@
 // src/brandConfig.js
+
 const brands = {
   xrp: {
     key: 'xrp',
@@ -8,12 +9,10 @@ const brands = {
     meta: {
       url: 'https://xrpmemecoins.com',
       title: 'XRP MemeCoins | Real-Time XRPL MemeCoins Data Visualizer',
-      description: 'An interactive visualization of the XRP Ledger ecosystem...',
-      image: 'https://xrpmemecoins.com/assets/drop-logo1.png',
-      favicon: '/assets/drop-logo1.png'
     },
     navLinks: [
       { key: 'about', path: '/about', label: 'About' },
+      { key: 'blog', path: '/blog', label: 'Blog' },
       { key: 'faq', path: '/faq', label: 'FAQ' },
       { key: 'terms', path: '/terms-of-service', label: 'Terms' },
       { key: 'privacy', path: '/privacy-policy', label: 'Privacy' },
@@ -27,13 +26,10 @@ const brands = {
     meta: {
       url: 'https://tokencanvas.io',
       title: 'TokenCanvasIO | Interactive Crypto Bubbles',
-      description: 'An interactive visualization of cryptocurrency and NFT market data...',
-      image: 'https://tokencanvas.io/assets/TokenCanvasLogo.png',
-      faviconLight: '/assets/TokenCanvasLogoBlack.png',
-      faviconDark: '/assets/TokenCanvasLogo.png',
     },
     navLinks: [
       { key: 'about', path: '/about', label: 'About' },
+      { key: 'blog', path: '/blog', label: 'Blog' },
       { key: 'whitepaper', path: '/white-paper', label: 'White Paper' },
       { key: 'faq', path: '/faq', label: 'FAQ' },
       { key: 'terms', path: '/terms-of-service', label: 'Terms' },
@@ -42,14 +38,7 @@ const brands = {
   },
 };
 
-export function getBrandConfig_Server(headers) {
-  const host = headers.get('x-forwarded-host') || headers.get('host');
-  if (host && (host.includes('xrpbubbles.com') || host.includes('xrpmemecoins.com'))) {
-    return brands.xrp;
-  }
-  return brands.default;
-};
-
+// This is the only function needed. It runs safely in the browser.
 export function getBrandConfig_Client() {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
