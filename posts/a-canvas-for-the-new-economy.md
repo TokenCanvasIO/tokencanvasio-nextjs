@@ -9,7 +9,7 @@ _This article is for informational purposes only and does not constitute an offe
 
 ### The Short Story
 
-We built XRP MemeCoins on a simple but powerful belief: that personalization is more than just changing colors. It’s about giving you back control. Here’s what that means for you:
+We built XRPMemeCoins.com on a simple but powerful belief: that personalization is more than just changing colors. It’s about giving you back control. Here’s what that means for you:
 
 **Control Over Chaos.** The crypto market is a firehose of information. Your canvas is your sanctuary — a place where you can turn down the volume of the entire market and listen only to the signals you choose. This sense of control is an incredibly powerful feeling.
 
