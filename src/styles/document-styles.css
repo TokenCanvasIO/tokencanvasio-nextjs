@@ -168,3 +168,41 @@ a.blog-card:hover {
 .nav-arrow.next {
   flex-direction: row-reverse;
 }
+/* --- BREADCRUMB STYLES --- */
+.breadcrumb-nav {
+  max-width: 56rem;
+  margin: 0 auto 1.5rem auto;
+  padding: 0 2.5rem;
+  font-size: 0.875rem;
+}
+
+.breadcrumb-nav ol {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.breadcrumb-separator {
+  margin: 0 0.5rem;
+  color: var(--text-secondary);
+}
+
+.breadcrumb-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.breadcrumb-link:hover {
+  color: var(--text-primary);
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}

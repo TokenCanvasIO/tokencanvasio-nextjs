@@ -3,22 +3,18 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useBrand } from '@/context/BrandContext';
 import { FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 
-// This array defines the order and paths of your pages
-const documentFlow = [
-  { key: 'about', path: '/about', label: 'About' },
-  { key: 'whitepaper', path: '/white-paper', label: 'White Paper' },
-  { key: 'faq', path: '/faq', label: 'FAQ' },
-  { key: 'terms', path: '/terms-of-service', label: 'Terms' },
-  { key: 'privacy', path: '/privacy-policy', label: 'Privacy' },
-];
-
 const DocNavigator = ({ currentPageKey }) => {
+  const brand = useBrand();
+  // Use the brand-specific navLinks from the context
+  const documentFlow = brand?.navLinks.filter(link => link.path) || [];
+  
   const currentIndex = documentFlow.findIndex(doc => doc.key === currentPageKey);
 
   if (currentIndex === -1) {
-    return null; // Don't render if the page isn't in our defined flow
+    return null;
   }
 
   const prevDoc = currentIndex > 0 ? documentFlow[currentIndex - 1] : null;
@@ -33,8 +29,7 @@ const DocNavigator = ({ currentPageKey }) => {
             <span>{prevDoc.label}</span>
           </Link>
         ) : (
-          // Empty div to maintain spacing
-          <div></div>
+          <div></div> // Empty div for spacing
         )}
       </div>
       <div>
