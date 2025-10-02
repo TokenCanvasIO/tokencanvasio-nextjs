@@ -1,4 +1,4 @@
-// src/components/DocNavigator.jsx
+// src/components/DocNavigator.jsx -- DEBUGGING VERSION
 "use client";
 
 import React from 'react';
@@ -8,10 +8,20 @@ import { FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 
 const DocNavigator = ({ currentPageKey }) => {
   const brand = useBrand();
-  // Use the brand-specific navLinks from the context
   const documentFlow = brand?.navLinks.filter(link => link.path) || [];
-  
   const currentIndex = documentFlow.findIndex(doc => doc.key === currentPageKey);
+
+  // --- DEBUGGING LINES ---
+  console.log("--- DOC NAVIGATOR DEBUG ---");
+  console.log("Current Page Key Prop:", currentPageKey);
+  console.log("Brand object:", brand);
+  console.log("Document Flow Array:", documentFlow);
+  console.log("Found Index:", currentIndex);
+  if (currentIndex === -1) {
+    console.error("CRITICAL ERROR: The key '" + currentPageKey + "' was NOT FOUND in the Document Flow Array. The navigator will not render.");
+  }
+  console.log("-------------------------");
+  // --- END DEBUGGING ---
 
   if (currentIndex === -1) {
     return null;
@@ -29,7 +39,7 @@ const DocNavigator = ({ currentPageKey }) => {
             <span>{prevDoc.label}</span>
           </Link>
         ) : (
-          <div></div> // Empty div for spacing
+          <div></div>
         )}
       </div>
       <div>
