@@ -1,0 +1,170 @@
+/* src/styles/document-styles.css */
+
+/* --- Page Layout & Wrapper --- */
+.doc-page-wrapper {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 2.5rem;
+  border-radius: 0.75rem;
+  background-color: var(--background-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-primary);
+}
+
+.blog-wrapper {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 2.5rem;
+}
+
+/* --- Typography --- */
+.doc-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.doc-subtitle {
+  margin-bottom: 2.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.doc-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.doc-text {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.doc-page-wrapper .doc-text p {
+  margin-bottom: 1.25em;
+}
+
+.doc-text ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+}
+
+.doc-text li {
+  margin-bottom: 0.75rem;
+}
+
+.doc-text a {
+  color: var(--accent-color);
+  text-decoration: underline;
+  transition: opacity 0.2s;
+}
+
+.doc-text a:hover {
+  opacity: 0.8;
+}
+
+/* --- Footer & Navigator --- */
+.doc-footer, .doc-navigator {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.doc-footer p {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.doc-navigator {
+  display: flex;
+  justify-content: space-between;
+}
+
+.nav-arrow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: color 0.2s ease-in-out;
+}
+
+.nav-arrow:hover {
+  color: var(--text-primary);
+}
+
+.nav-arrow.next {
+  flex-direction: row-reverse;
+}
+
+
+/* --- THE FINAL BLOG CARD FIX --- */
+a.blog-card {
+  display: block;
+  padding: 2rem; /* This adds the padding you want */
+  border-radius: 0.75rem; /* This adds the rounded corners you want */
+  border: 1px solid var(--border-color);
+  color: inherit;
+  text-decoration: none !important;
+  transition: background-color 0.2s ease-in-out;
+}
+
+a.blog-card:hover {
+  background-color: var(--accent-color);
+}
+
+/* Reset all text elements inside the card to look like normal text */
+.blog-card h2, .blog-card p, .blog-card div {
+  text-decoration: none !important;
+  color: inherit;
+}
+
+.blog-card h2 {
+  color: var(--text-primary);
+}
+
+.blog-card p, .blog-card small, .blog-card div {
+  color: var(--text-secondary);
+}
+
+/* Change all text colors together on hover */
+.blog-card:hover h2, .blog-card:hover p, .blog-card:hover div {
+  color: var(--accent-text-color);
+}
+/* --- Navigator Styles --- */
+.doc-navigator {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.nav-arrow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: color 0.2s ease-in-out;
+}
+
+.nav-arrow:hover {
+  color: var(--text-primary);
+}
+
+.nav-arrow.next {
+  flex-direction: row-reverse;
+}

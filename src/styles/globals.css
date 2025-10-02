@@ -1,0 +1,27 @@
+/* src/app/globals.css */
+
+/* 1. Set up Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. Apply a base layer of styles. This layer will be overridden by themes. */
+@layer base {
+  html, body {
+    height: 100%;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body {
+    /* Use the theme variable for background color as the default */
+    background-color: var(--background-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  main {
+    /* This ensures the main content area can grow and allow scrolling */
+    min-height: calc(100vh - 170px); /* Adjust 170px if your header/footer is different */
+  }
+}

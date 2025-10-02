@@ -1,0 +1,717 @@
+/* =============================================
+   1. GLOBAL & NON-THEME VARIABLES
+   ============================================= */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+:root {
+  /* Typography */
+  --font-ui: "Orbitron", sans-serif;
+
+  /* Sizing & Spacing */
+  --header-top-position: 5px;
+  --header-height: 60px;
+  --header-tier2-height: 50px;
+  --spacing-small: 10px;
+  --spacing-medium: 15px;
+  --spacing-large: 5px;
+  --radius-standard: 8px;
+  --radius-large: 12px;
+  --radius-pill: 30px;
+  --radius-circle: 50%;
+}
+
+/* =============================================
+   2. BASE & LAYOUT
+   ============================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+#root > div {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.scrollable-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-top: calc(var(--header-top-position) + var(--header-height) + var(--header-tier2-height));
+}
+
+.canvas-container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* =============================================
+   3. HEADER
+   ============================================= */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: fixed;
+  top: var(--header-top-position);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 95%;
+  max-width: 1200px;
+  height: var(--header-height);
+  padding: 0 var(--spacing-medium);
+  border-radius: var(--radius-pill);
+  gap: var(--spacing-medium);
+  z-index: 9002;
+  background-color: rgba(var(--glass-background-rgb), 0.3); /* UPDATED */
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.header-left, .header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.header-left { flex-shrink: 0; }
+.header-center { display: none; } /* Mobile default */
+
+
+.site-logo img {
+  width: 50px;
+  height: 50px;
+  display: block;
+}
+
+.site-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  flex-shrink: 0;
+}
+
+.site-title-wrapper h1 {
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.site-title-wrapper .trendbar-toggle-in-title {
+  font-size: 20px;
+  color: var(--text-primary); /* UPDATED */
+}
+
+.beta-tag {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  background-color: rgba(var(--glass-background-rgb), 0.2); /* UPDATED */
+  color: var(--text-primary); /* UPDATED */
+  border-radius: var(--radius-pill);
+  line-height: 1;
+}
+
+.mobile-tier-2-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: fixed;
+  top: calc(var(--header-top-position) + var(--header-height) + var(--spacing-small));
+  left: 0;
+  width: 100%;
+  height: var(--header-tier2-height);
+  padding: 0 var(--spacing-medium);
+  gap: var(--spacing-medium);
+  z-index: 8999;
+}
+
+/* =============================================
+   4. OVERLAYS & MENUS
+   ============================================= */
+.command-palette-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background-color: rgba(var(--glass-background-rgb), 0.5); /* UPDATED */
+  backdrop-filter: blur(8px);
+  z-index: 10000; display: flex; justify-content: center;
+  padding-top: 15vh; animation: fadeIn 0.3s ease;
+}
+
+.command-palette {
+  width: 90%; max-width: 600px; 
+  background-color: rgba(var(--glass-background-rgb), 0.9); /* UPDATED */
+  border-radius: var(--radius-large); border: 1px solid var(--border-color);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4); /* UPDATED */
+  overflow: hidden;
+  display: flex; flex-direction: column; height: min-content;
+}
+
+.search-input-wrapper {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+}
+
+.search-input-wrapper input {
+  flex-grow: 1; background: none; border: none; outline: none;
+  color: var(--text-primary); font-size: 16px; font-family: var(--font-ui);
+}
+
+.keyboard-shortcut {
+  font-size: 12px; 
+  color: var(--text-secondary); /* UPDATED */
+  border: 1px solid var(--border-color); /* UPDATED */
+  padding: 2px 6px; border-radius: 4px;
+}
+
+.search-results { max-height: 40vh; overflow-y: auto; }
+.search-results ul { list-style: none; padding: 8px; }
+
+.search-results li {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: var(--radius-standard); cursor: pointer; transition: background-color 0.2s ease;
+  color: var(--text-primary); /* UPDATED */
+}
+.search-results li:hover { 
+  background-color: var(--accent-color); 
+  color: var(--accent-text-color); /* UPDATED */
+}
+.search-results li .result-logo { width: 24px; height: 24px; border-radius: var(--radius-circle); }
+
+.no-results { padding: 20px; text-align: center; color: var(--text-secondary); /* UPDATED */ }
+
+.fullscreen-menu-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: radial-gradient(circle at top, rgba(var(--glass-background-rgb), 0.9) 0%, var(--background-primary) 100%); /* UPDATED */
+  z-index: 9000; display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  animation: fadeIn 0.4s ease;
+  overflow-y: auto;
+  padding: 100px 20px 40px;
+}
+
+.fullscreen-nav {
+  display: flex; flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+}
+
+a.fullscreen-nav-item,
+button.fullscreen-nav-item {
+  color: var(--text-primary); text-decoration: none;
+  font-size: 18px;
+  padding: 13px 20px;
+  display: flex; align-items: center; gap: 15px; opacity: 0;
+  transform: translateY(20px); animation: slideUpFadeIn 0.5s ease forwards;
+  transition: all 0.2s ease; /* UPDATED */
+  border-bottom: 1px solid transparent;
+}
+button.fullscreen-nav-item {
+  background: none; border: none; text-align: left;
+  font-family: inherit; cursor: pointer; width: 100%;
+}
+.fullscreen-nav-item:hover { 
+  color: var(--accent-color); /* UPDATED */
+  transform: translateX(5px); 
+  border-bottom-color: var(--accent-color); /* UPDATED */
+}
+.fullscreen-nav-item:nth-child(1) { animation-delay: 0.1s; }
+.fullscreen-nav-item:nth-child(2) { animation-delay: 0.15s; }
+.fullscreen-nav-item:nth-child(3) { animation-delay: 0.2s; }
+.fullscreen-nav-item .nav-icon {
+  font-size: 20px; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.fullscreen-nav-item .nav-icon img { width: 100%; height: 100%; object-fit: contain; }
+
+.actions-menu-container { position: relative; }
+.actions-dropdown-menu {
+  display: none; position: absolute; top: calc(100% + 10px); right: 0; width: 220px;
+  background-color: rgba(var(--glass-background-rgb), 0.95); /* UPDATED */
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-large); z-index: 9100; padding: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4); /* UPDATED */
+  animation: fadeIn 0.2s ease;
+}
+.actions-dropdown-menu.active { display: block; }
+.actions-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px;
+  background: none; border: none; border-radius: var(--radius-standard); color: var(--text-primary);
+  font-family: var(--font-ui); font-size: 14px; text-decoration: none;
+  text-align: left; cursor: pointer; transition: all 0.2s ease; /* UPDATED */
+}
+.actions-item:hover { 
+  background-color: var(--accent-color); 
+  color: var(--accent-text-color); /* UPDATED */
+}
+.actions-item .action-icon {
+  width: 18px; height: 18px; display: flex;
+  align-items: center; justify-content: center;
+  color: var(--text-secondary);
+}
+.actions-item .action-icon img { width: 100%; height: 100%; object-fit: contain; }
+.actions-item .action-icon svg { color: var(--text-secondary); }
+
+/* =============================================
+   5. COMPONENTS
+   ============================================= */
+.header-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-primary); text-decoration: none;
+  background: transparent; border: none; padding: 0; cursor: pointer;
+}
+.header-icon svg, .header-icon img { width: 24px; height: 24px; }
+.coingecko-icon img { width: 24px; height: 24px; }
+
+.hamburger-icon,
+.actions-menu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  width: 32px; height: 32px;
+  position: relative; flex-shrink: 0;
+  color: var(--text-primary); /* UPDATED */
+}
+.hamburger-icon img, .actions-menu-btn .actions-menu-icon {
+  width: 100%; height: 100%;
+}
+.hamburger-icon { transition: transform 0.3s ease; }
+.hamburger-icon.active { transform: rotate(135deg); }
+
+.actions-menu-btn .actions-menu-icon {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.3s ease;
+}
+.actions-menu-btn.active .actions-menu-icon {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.filter-buttons { display: flex; gap: 5px; }
+.filter-btn {
+  padding: 6px 12px; 
+  background: var(--accent-color); /* UPDATED */
+  color: var(--accent-text-color); /* UPDATED */
+  border: 1px solid var(--border-color); 
+  border-radius: var(--radius-standard);
+  cursor: pointer; font-size: 12px; font-family: var(--font-ui);
+  display: flex; align-items: center; white-space: nowrap; transition: all 0.2s ease;
+}
+.filter-btn:hover {
+  filter: brightness(1.15); /* UPDATED */
+}
+.filter-btn.active {
+  background-color: var(--text-primary); 
+  border-color: var(--text-primary);
+  color: var(--background-primary);
+}
+.filter-btn.positive { border-color: var(--color-positive); color: var(--color-positive); }
+.filter-btn.negative { border-color: var(--color-negative); color: var(--color-negative); }
+
+/* =============================================
+   6. ANIMATIONS
+   ============================================= */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUpFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================================
+   7. RESPONSIVE & BRAND OVERRIDES
+   ============================================= */
+
+/* --------- Mobile Portrait (Tabs Styling) --------- */
+@media (max-width: 767px) and (orientation: portrait) {
+  /* Move standard timeframe tabs up slightly */
+  .mobile-tier-2-header {
+    top: calc(var(--header-top-position) + var(--header-height) + -5px); /* Moves from 75px to 67px from top */
+  }
+
+  /* Apply container-less style to standard timeframe tabs */
+  .mobile-tier-2-header .filter-buttons {
+    background: transparent;
+    backdrop-filter: none;
+    border: none;
+    padding: 0;
+  }
+
+  /* Style the individual buttons for high readability over the canvas */
+  .mobile-tier-2-header .filter-btn {
+    font-weight: 600;
+    text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.9);
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+  }
+
+  /* Ensure active and status states remain clear */
+  .mobile-tier-2-header .filter-btn.active {
+    background: var(--text-primary);
+    color: var(--background-primary);
+    text-shadow: none;
+  }
+  .mobile-tier-2-header .filter-btn.positive {
+    color: var(--color-positive);
+    text-shadow: 0px 1px 3px rgba(0,0,0,0.7); /* Tone down shadow for colored text */
+  }
+  .mobile-tier-2-header .filter-btn.negative {
+    color: var(--color-negative);
+    text-shadow: 0px 1px 3px rgba(0,0,0,0.7); /* Tone down shadow for colored text */
+  }
+}
+
+/* --------- Tablet (Zen UI Sizing) --------- */
+@media (min-width: 768px) and (max-width: 999px) {
+  /* Make Zen Mode timeframe tabs larger and easier to tap */
+  .zen-filters-container .filter-btn {
+    padding: 10px 18px;
+    font-size: 16px;
+    height: auto; /* Allow height to be determined by padding */
+  }
+
+  /* Make Zen Mode action buttons (e.g., Exit Zen) larger */
+  .zen-ui-container .floating-btn,
+  .zen-ui-container .zen-ui-btn {
+    width: 60px;
+    height: 60px;
+  }
+  
+  /* Adjust icon size within the larger buttons */
+  .zen-ui-container .floating-btn svg {
+      font-size: 22px;
+  }
+}
+
+/* --------- Mobile Landscape --------- */
+@media (max-width: 999px) and (orientation: landscape) {
+  .header {
+    height: 40px;
+    top: calc(env(safe-area-inset-top, 0px) + 4px);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    padding: 0 15px;
+  }
+  .header .header-center {
+    display: flex;
+    justify-content: center;
+  }
+  .site-logo img { width: 30px; height: 30px; }
+  .site-title-wrapper h1 { font-size: 16px; }
+  .hamburger-icon { width: 26px; height: 26px; }
+  .mobile-tier-2-header { display: none; }
+  main {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 40px + 35px + 20px);
+  }
+  .fullscreen-menu-overlay {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 60px);
+    padding-bottom: 50px;
+  }
+  .filter-btn { padding: 4px 8px; font-size: 11px; height: 24px; }
+  .zen-mode .filter-btn { padding: 6px 12px; font-size: 12px; height: 28px; }
+  .coingecko-icon img { width: 22px; height: 22px; }
+}
+
+@media (max-width: 999px) and (min-width: 481px) and (orientation: landscape) {
+  .header-right { flex: 1 1 auto; justify-content: flex-end; }
+  .mobile-only { display: flex; align-items: center; gap: 16px; }
+}
+
+/* --------- XRP Brand Mobile --------- */
+@media (max-width: 999px) {
+  .header.brand-xrp .site-logo img { width: 30px; height: 30px; }
+  .header.brand-xrp .site-title-wrapper h1 { font-size: 1.1rem; }
+  .header.brand-xrp .beta-tag { display: none; }
+}
+
+/* --------- Desktop --------- */
+@media (min-width: 1000px) {
+  .mobile-only, .mobile-tier-2-header { display: none; }
+  .desktop-only, .header-center { display: flex; }
+  .header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    padding: 0 30px;
+    height: var(--header-height);
+    top: var(--header-top-position);
+  }
+  .desktop-actions-container { display: flex; align-items: center; gap: var(--spacing-medium); width: 100%; }
+  .header-left { justify-self: start; }
+  .header-center { justify-self: center; }
+  .site-logo img { width: 60px; height: 60px; }
+  .site-title-wrapper h1 { font-size: 24px; }
+  .beta-tag { font-size: 12px; padding: 4px 10px; }
+  .filter-btn { font-size: 14px; }
+  main {
+    padding-top: calc(var(--header-top-position) + var(--header-height) + var(--spacing-large));
+  }
+}
+/* =============================================
+   8. THEME OVERRIDES (Specific theme tweaks)
+   ============================================= */
+/* --------- Light Theme --------- */
+.theme-light .header-icon svg {
+  color: var(--text-primary); /* UPDATED */
+}
+.theme-light .actions-menu-btn .actions-menu-icon,
+.theme-light .hamburger-icon img {
+  filter: var(--logo-inversion-filter); /* UPDATED */
+}
+.theme-light a.fullscreen-nav-item,
+.theme-light button.fullscreen-nav-item,
+.theme-light .actions-item {
+  color: var(--text-primary); 
+}
+.theme-light .fullscreen-nav-item .nav-icon img,
+.theme-light .actions-item .action-icon img {
+  filter: var(--logo-inversion-filter); /* UPDATED */
+}
+.theme-light .filter-btn.positive {
+  color: var(--color-positive); /* UPDATED */
+  border-color: var(--color-positive);
+}
+
+/* =============================================
+   9. ACCOUNT MODAL STYLES
+   ============================================= */
+.account-modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background-color: rgba(var(--glass-background-rgb), 0.6); /* UPDATED */
+  backdrop-filter: blur(8px);
+  z-index: 10000; display: flex; justify-content: center; align-items: center;
+  animation: fadeIn 0.3s ease;
+}
+.account-modal-panel {
+  background-color: rgba(var(--glass-background-rgb), 0.9); /* UPDATED */
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-large);
+  padding: 24px; width: 90%; max-width: 300px;
+  display: flex; flex-direction: column; align-items: center; gap: 15px;
+}
+.account-modal-panel .auth-controls {
+  flex-direction: column; width: 100%;
+}
+.account-modal-panel .auth-button {
+  width: 100%; padding: 12px; font-size: 1rem;
+}
+.account-modal-panel .user-greeting {
+  font-size: 1.1rem; margin-bottom: 5px;
+}
+
+/* =============================================
+   10. HEADER FILTER BUTTON CONTAINER
+   ============================================= */
+.header .filter-buttons {
+  background-color: rgba(var(--glass-background-rgb), 0.5); /* UPDATED */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color); /* UPDATED */
+  padding: 6px;
+  border-radius: var(--radius-pill); /* UPDATED */
+}
+.header .filter-btn {
+  border: none;
+  background: transparent;
+}
+.header .filter-btn.active {
+  background-color: rgba(var(--glass-background-rgb), 0.5); /* UPDATED */
+  color: var(--text-primary); /* UPDATED */
+}
+
+@media (max-width: 767px) and (orientation: portrait) {
+  .trending-bar-container {
+    margin-top: -15px;
+  }
+}
+
+@keyframes canvas-tada {
+  from { transform: scale3d(1, 1, 1); }
+  10%, 20% { transform: scale3d(0.9, 0.9, 0.9) rotate3d(0, 0, 1, -3deg); }
+  30%, 50%, 70%, 90% { transform: scale3d(1.1, 1.1, 1.1) rotate3d(0, 0, 1, 3deg); }
+  40%, 60%, 80% { transform: scale3d(1.1, 1.1, 1.1) rotate3d(0, 0, 1, -3deg); }
+  to { transform: scale3d(1, 1, 1); }
+}
+
+.logo-canvas-animation {
+  animation: canvas-tada 1.5s ease-in-out;
+}
+/* --------- Tablet Upright (Header Tabs) --------- */
+@media (min-width: 744px) and (max-width: 1199px) and (orientation: portrait) {
+  .header .header-center {
+    display: flex;
+    justify-content: center;
+  }
+}
+/* =============================================
+   FINAL TIMEFRAME TAB SOLUTION (MOBILE)
+   ============================================= */
+
+@media (max-width: 767px) and (orientation: portrait) {
+
+  /* --- INACTIVE TABS --- */
+  /* This gives inactive tabs a background for readability over the canvas */
+  .mobile-tier-2-header .filter-btn {
+    background-color: rgba(0, 0, 0, 0.4);
+    color: var(--text-primary); /* Use theme's primary (light) text color */
+    text-shadow: none; /* No blur */
+    border-radius: var(--radius-pill);
+    padding: 6px 12px;
+  }
+
+  /* --- STANDARD ACTIVE TAB (e.g., 24H, 7D) --- */
+  /* This creates a high-contrast "pressed" look */
+  .mobile-tier-2-header .filter-btn.active {
+    background-color: var(--text-primary); /* e.g., White */
+    color: var(--background-primary);     /* e.g., Black */
+  }
+
+  /* --- NEGATIVE ACTIVE TAB (Red Timeframe) --- */
+  /* This is the specific fix for the unreadable red tab */
+  .mobile-tier-2-header .filter-btn.active.negative {
+    background-color: var(--color-negative); /* Solid Red */
+    color: var(--text-primary);             /* White/Light Text */
+  }
+
+  /* --- POSITIVE ACTIVE TAB (Green Timeframe) --- */
+  .mobile-tier-2-header .filter-btn.active.positive {
+    background-color: var(--color-positive); /* Solid Green */
+    color: var(--text-primary);             /* White/Light Text */
+  }
+}
+/* =============================================
+   11. DATA LENS TOGGLE (Desktop Icon Switcher)
+   ============================================= */
+
+/* The main container for the three icons */
+.data-lens-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px; /* Spacing between the icons */
+  background-color: rgba(var(--glass-background-rgb), 0.5);
+  border: 1px solid var(--border-color);
+  padding: 5px;
+  border-radius: var(--radius-pill); /* Makes it a pill shape */
+}
+
+/* Styling for each individual icon button */
+.data-lens-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border: none;
+  width: 36px;  /* Consistent width */
+  height: 36px; /* Consistent height */
+  border-radius: var(--radius-circle); /* Makes them circular */
+  cursor: pointer;
+  color: var(--text-secondary); /* Dimmed color for inactive icons */
+  transition: all 0.2s ease-in-out;
+}
+
+/* Style for the icon itself to match others */
+.data-lens-btn svg {
+  font-size: 18px; /* Controls the size of the icon */
+}
+
+/* Hover effect for better user feedback */
+.data-lens-btn:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Style for the ACTIVE icon button */
+.data-lens-btn.active {
+  background-color: var(--accent-color);
+  color: var(--accent-text-color);
+  box-shadow: 0 0 10px rgba(var(--accent-color-rgb), 0.5);
+}
+
+@media (max-width: 999px) and (orientation: landscape) {
+  .header .header-center {
+    display: flex;
+    justify-content: center;
+  }
+}
+@media (min-width: 744px) and (max-width: 1199px) and (orientation: portrait) {
+  .header .header-center {
+    display: flex;
+    justify-content: center;
+  }
+}
+
+/* This is the new rule that activates when search mode is on */
+.header.mobile-search-active .header-center {
+  /* This makes the search bar's container visible */
+  display: flex;  
+  /* This makes it take up all the free space in the middle */
+  flex-grow: 1;
+  /* This gives it a little breathing room from the logo */
+  margin-left: 1rem;
+}
+/* --- Active Header Filter Button --- */
+.header .filter-btn.active {
+  background-color: var(--text-primary);
+  color: var(--background-primary);
+  box-shadow: 0 0 15px -2px var(--text-primary);
+}
+.header-icon.active {
+  color: var(--accent-color);
+  transform: scale(1.1);
+}
+
+/* NEW RULE TO CREATE THE GAP */
+.zen-mode-btn {
+  margin-left: auto;
+}
+/* =============================================
+   12. HEADER ICONS FINAL OVERRIDE
+   ============================================= */
+@media (min-width: 1000px) {
+  .header-right {
+    justify-self: stretch; /* Forces the right-side container to fill all available space */
+    flex-grow: 1;
+  }
+
+  .desktop-actions-container {
+    width: 100%; /* Forces the icon group to use all the space from the container above */
+  }
+
+  .zen-mode-btn {
+    margin-left: auto; /* Pushes the zen button away from the other icons */
+  }
+}
+/* Forcefully increases the search icon size */
+.header-icon[title="Search"] svg {
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+}
+.icon-hidden {
+  visibility: hidden;
+}

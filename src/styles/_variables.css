@@ -1,0 +1,186 @@
+/* =============================================
+   GLOBAL & NON-THEME VARIABLES
+   ============================================= */
+:root {
+  --font-ui: 'Orbitron', sans-serif;
+  --font-display: 'Oswald', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --spacing-small: 10px;
+  --spacing-medium: 15px;
+  --spacing-large: 20px;
+  --radius-standard: 8px;
+  --radius-pill: 12px;
+  --radius-circle: 50%;  
+  --header-height: 70px; 
+}
+
+/* =============================================
+   THEME DEFINITIONS
+   ============================================= */
+
+/* FIXED: Each theme rule now applies directly to the body for higher specificity */
+
+body.theme-cupertino {
+  --background-primary: #2c2c2e;
+  --text-primary: #FAFAFA;
+  --text-secondary: #9A9A9A;
+  --accent-color: #3f3f41;
+  --accent-text-color: #FAFAFA;
+  --border-color: rgba(142, 142, 147, 0.5);
+  --color-positive: #32D74B;
+  --color-negative: #FF453A;
+  --star-color: #EAEAEB;
+  --glass-background-rgb: 30, 30, 32;
+  --logo-inversion-filter: none;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-apple-event {
+  --background-primary: #000000;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1a6;
+  --accent-color: #ff8a00;
+  --accent-text-color: #ffffff;
+  --border-color: #2c7dff;
+  --color-positive: #34d399;
+  --color-negative: #fb7185;
+  --star-color: #ffffff;
+  --glass-background-rgb: 18, 18, 18;
+  --logo-inversion-filter: none;
+  --overlay-background: rgba(0, 0, 0, 0.7);
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-google {
+  --background-primary: #2d96ff;
+  --text-primary: #202124;
+  --text-secondary: #5f6368;
+  --accent-color: #4285F4;
+  --accent-text-color: #202124; 
+  --border-color: #dadce0;
+  --color-positive: #34A853;
+  --color-negative: #EA4335;
+  --star-color: #000000;
+  --glass-background-rgb: 255, 255, 255;
+  --logo-inversion-filter: none;
+  --overlay-background: rgba(32, 33, 36, 0.6);
+  --panel-gradient-start: #FFFFFF;
+  --panel-gradient-end: #F8F9FA;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.4);
+  --accent-gold-light: #1a73e8;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-grok {
+  --background-primary: #0D1117;
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --accent-color: #2d333b;
+  --accent-text-color: #c9d1d9;
+  --border-color: #30363d;
+  --color-positive: #238636;
+  --color-negative: #da3633;
+  --star-color: #ffffff;
+  --glass-background-rgb: 13, 17, 23;
+  --logo-inversion-filter: none;
+  --overlay-background: rgba(0, 0, 0, 0.7);
+  --panel-gradient-start: #101F2D;
+  --panel-gradient-end: #0D1A26;
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.4);
+  --accent-gold-light: #D4AF37;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-main {
+  --background-primary: #192734;
+  --text-primary: #ffffff;
+  --text-secondary: #aab8c2;
+  --accent-color: #38444d;
+  --accent-text-color: #ffffff;
+  --border-color: rgba(255, 255, 255, 0.15);
+  --color-positive: #00ff00;
+  --color-negative: #ff0000;
+  --star-color: #ffffff;
+  --glass-background-rgb: 34, 48, 60;
+  --logo-inversion-filter: none;
+  --overlay-background: rgba(0, 0, 0, 0.7);
+  --panel-gradient-start: #101F2D;
+  --panel-gradient-end: #0D1A26;
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.4);
+  --accent-gold-light: #D4AF37;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-dark {
+  --background-primary: #121212;
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --accent-color: #1f2937;
+  --accent-text-color: #e5e7eb;
+  --border-color: #374151;
+  --color-positive: #22c55e;
+  --color-negative: #ef4444;
+  --star-color: #ffffff;
+  --glass-background-rgb: 26, 26, 26;
+  --logo-inversion-filter: none;
+  --mask-color-opaque: black;
+  --overlay-background: rgba(0, 0, 0, 0.7);
+  --panel-gradient-start: #101F2D;
+  --panel-gradient-end: #0D1A26;
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.4);
+  --accent-gold-light: #D4AF37;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-light {
+  --background-primary: #dedede;
+  --text-primary: #1c1e21;
+  --text-secondary: #65676b;
+  --accent-color: #c5c5c5;
+  --accent-text-color: #1c1e21;
+  --border-color: #ffffff;
+  --color-positive: #16a34a;
+  --color-negative: #dc2626;
+  --star-color: #000000;
+  --glass-background-rgb: 255, 255, 255;
+  --logo-inversion-filter: invert(1);
+  --overlay-background: rgba(32, 33, 36, 0.6);
+  --panel-gradient-start: #f6f6f6;
+  --panel-gradient-end: #f6f6f6;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.4);
+  --accent-gold-light: #1a73e8;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+body.theme-ripple {
+  --background-primary: #0a0f1f; 
+  --text-primary: #ffffff;
+  --text-secondary: #b0c4de; 
+  --accent-color: #0076FF;
+  --accent-text-color: #ffffff;
+  --border-color: #374151; 
+  --color-positive: #22c55e;
+  --color-negative: #ef4444;
+  --star-color: #ffffff;
+  --glass-background-rgb: 17, 24, 39;
+  --logo-inversion-filter: none;
+  --panel-gradient-start: #101F2D;
+  --panel-gradient-end: #0D1A26;
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.4);
+  --accent-gold-light: #D4AF37;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
