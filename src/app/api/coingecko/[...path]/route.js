@@ -102,8 +102,9 @@ export async function GET(request, { params }) {
       timestamp: new Date(),
     });
 
-    const response = NextResponse.json(data); // Still return the original data to the user
-    response.headers.set('X-Source', 'NextJS-API-V2-Live');
+    const response = NextResponse.json(data);
+    // --- UPDATED VERSION TAG ---
+    response.headers.set('X-Source', 'NextJS-API-V2.1-Live');
     return response;
 
   } catch (error) {
