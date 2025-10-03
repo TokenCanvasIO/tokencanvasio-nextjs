@@ -6,6 +6,30 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 let db;
 
+// --- ADDED: Helper function to clean data for Firestore ---
+// This function recursively removes any keys with 'undefined' values.
+const sanitizeForFirestore = (obj) => {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item));
+  }
+
+  const newObj = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      if (value !== undefined) {
+        newObj[key] = sanitizeForFirestore(value);
+      }
+    }
+  }
+  return newObj;
+};
+
+
 const initializeFirebase = () => {
   const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!firebaseKey) {
@@ -52,7 +76,6 @@ export async function GET(request, { params }) {
       const { timestamp, data } = doc.data();
       const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
       if (ageSeconds < CACHE_DURATION_SECONDS) {
-        // --- ADDED TAG FOR CACHED RESPONSE ---
         const response = NextResponse.json(data);
         response.headers.set('X-Source', 'NextJS-API-V2-Cache');
         return response;
@@ -72,15 +95,19 @@ export async function GET(request, { params }) {
 
     const data = await apiResponse.json();
 
-    await cacheRef.set({ data: data, timestamp: new Date() });
+    // --- UPDATED: Sanitize the data before saving it to the cache ---
+    const sanitizedData = sanitizeForFirestore(data);
+    await cacheRef.set({
+      data: sanitizedData,
+      timestamp: new Date(),
+    });
 
-    // --- ADDED TAG FOR FRESH RESPONSE ---
-    const response = NextResponse.json(data);
+    const response = NextResponse.json(data); // Still return the original data to the user
     response.headers.set('X-Source', 'NextJS-API-V2-Live');
     return response;
 
   } catch (error) {
-    console.error(`Error in CoinGecko proxy for endpoint "${endpointPath}":`, error.message);
+    console.error(`Error in CoinGecko proxy for endpoint "${endpointPath}":`, error);
     return NextResponse.json({ message: 'An internal server error occurred.' }, { status: 500 });
   }
 }
