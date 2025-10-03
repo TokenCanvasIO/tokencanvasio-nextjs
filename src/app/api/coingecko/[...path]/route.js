@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// We will initialize Firebase inside the handler to ensure environment variables are available.
 let db;
 
 const initializeFirebase = () => {
@@ -23,13 +22,10 @@ const initializeFirebase = () => {
   db = getFirestore();
 };
 
-
-const CACHE_DURATION_SECONDS = 300; // Cache for 5 minutes
+const CACHE_DURATION_SECONDS = 300;
 
 export async function GET(request, { params }) {
-  // --- UPDATED: All initialization logic is now safely inside the handler ---
   try {
-    // Initialize Firebase only on the first run of the function instance.
     if (!db) {
       initializeFirebase();
     }
@@ -56,31 +52,32 @@ export async function GET(request, { params }) {
       const { timestamp, data } = doc.data();
       const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
       if (ageSeconds < CACHE_DURATION_SECONDS) {
-        return NextResponse.json(data);
+        // --- ADDED TAG FOR CACHED RESPONSE ---
+        const response = NextResponse.json(data);
+        response.headers.set('X-Source', 'NextJS-API-V2-Cache');
+        return response;
       }
     }
 
     const apiUrl = `https://pro-api.coingecko.com/api/v3/${endpointPath}${searchParams}`;
     
-    const response = await fetch(apiUrl, {
-      headers: {
-        'x-cg-pro-api-key': coingeckoApiKey,
-      },
+    const apiResponse = await fetch(apiUrl, {
+      headers: { 'x-cg-pro-api-key': coingeckoApiKey },
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      return NextResponse.json(errorData, { status: response.status });
+    if (!apiResponse.ok) {
+      const errorData = await apiResponse.json();
+      return NextResponse.json(errorData, { status: apiResponse.status });
     }
 
-    const data = await response.json();
+    const data = await apiResponse.json();
 
-    await cacheRef.set({
-      data: data,
-      timestamp: new Date(),
-    });
+    await cacheRef.set({ data: data, timestamp: new Date() });
 
-    return NextResponse.json(data);
+    // --- ADDED TAG FOR FRESH RESPONSE ---
+    const response = NextResponse.json(data);
+    response.headers.set('X-Source', 'NextJS-API-V2-Live');
+    return response;
 
   } catch (error) {
     console.error(`Error in CoinGecko proxy for endpoint "${endpointPath}":`, error.message);
