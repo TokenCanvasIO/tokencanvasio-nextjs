@@ -1,34 +1,10 @@
-// app/api/coingecko/[...path]/route.js
-
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 let db;
 
-// --- ADDED: Helper function to clean data for Firestore ---
-// This function recursively removes any keys with 'undefined' values.
-const sanitizeForFirestore = (obj) => {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeForFirestore(item));
-  }
-
-  const newObj = {};
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const value = obj[key];
-      if (value !== undefined) {
-        newObj[key] = sanitizeForFirestore(value);
-      }
-    }
-  }
-  return newObj;
-};
-
+// The sanitizeForFirestore function is no longer needed with this new approach.
 
 const initializeFirebase = () => {
   const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -46,7 +22,7 @@ const initializeFirebase = () => {
   db = getFirestore();
 };
 
-const CACHE_DURATION_SECONDS = 300;
+const CACHE_DURATION_SECONDS = 300; // Cache for 5 minutes
 
 export async function GET(request, { params }) {
   try {
@@ -73,11 +49,16 @@ export async function GET(request, { params }) {
   try {
     const doc = await cacheRef.get();
     if (doc.exists) {
-      const { timestamp, data } = doc.data();
+      // --- UPDATED: Read the string from the cache ---
+      const { timestamp, jsonData } = doc.data();
       const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
+
       if (ageSeconds < CACHE_DURATION_SECONDS) {
+        // --- UPDATED: Parse the string back into JSON before sending ---
+        const data = JSON.parse(jsonData);
         const response = NextResponse.json(data);
-        response.headers.set('X-Source', 'NextJS-API-V2-Cache');
+        // Version bump for definitive testing
+        response.headers.set('X-Source', 'NextJS-API-V2.2-Cache'); 
         return response;
       }
     }
@@ -95,16 +76,16 @@ export async function GET(request, { params }) {
 
     const data = await apiResponse.json();
 
-    // --- UPDATED: Sanitize the data before saving it to the cache ---
-    const sanitizedData = sanitizeForFirestore(data);
+    // --- UPDATED: Convert the entire data object to a string before saving ---
+    // This bypasses Firestore's validation and guarantees the save will work.
     await cacheRef.set({
-      data: sanitizedData,
+      jsonData: JSON.stringify(data),
       timestamp: new Date(),
     });
 
     const response = NextResponse.json(data);
-    // --- UPDATED VERSION TAG ---
-    response.headers.set('X-Source', 'NextJS-API-V2.1-Live');
+    // Version bump for definitive testing
+    response.headers.set('X-Source', 'NextJS-API-V2.2-Live');
     return response;
 
   } catch (error) {
