@@ -43,7 +43,6 @@ export default async function handler(request, res) {
     const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
     const { transactions, timeframe } = body;
     
-    // --- FIX: Filter out any transactions that don't have a valid assetId ---
     const validTransactions = transactions.filter(txn => txn && txn.assetId);
 
     if (!validTransactions || validTransactions.length === 0) {
@@ -67,7 +66,6 @@ export default async function handler(request, res) {
     const coingeckoApiKey = process.env.COINGECKO_API_KEY;
     if (!coingeckoApiKey) throw new Error("COINGECKO_API_KEY is not defined.");
     
-    // Use the filtered list from now on
     const uniqueAssetIds = [...new Set(validTransactions.map(txn => txn.assetId))];
     const days = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365 }[timeframe] || 30;
     
@@ -76,7 +74,30 @@ export default async function handler(request, res) {
         headers: { 'x-cg-pro-api-key': coingeckoApiKey },
       }).then(res => res.json())
     );
-    const historicalDataResponses = await Promise.all(pricePromises);
+
+    // --- DEFINITIVE FIX: INTERNAL TIMEOUT ---
+    const timeLimit = 9000; // 9 seconds, just under Netlify's 10-second limit
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Function timed out internally')), timeLimit);
+    });
+    
+    let historicalDataResponses;
+    try {
+      historicalDataResponses = await Promise.race([
+        Promise.all(pricePromises),
+        timeoutPromise
+      ]);
+    } catch (error) {
+      if (error.message === 'Function timed out internally') {
+        console.warn(`Portfolio history for ${uniqueAssetIds.length} coins took too long. Returning empty data.`);
+        // Gracefully fail by returning an empty chart, which stops the 500 error.
+        return res.status(200).json({ prices: [], volumes: [] });
+      }
+      // If it was a different error, let the main catch block handle it
+      throw error;
+    }
+    // --- END OF FIX ---
+
     const historicalDataMap = new Map();
     uniqueAssetIds.forEach((id, index) => {
       if (historicalDataResponses[index]?.prices) {
@@ -92,7 +113,7 @@ export default async function handler(request, res) {
     for (let timestamp = startTime; timestamp <= now; timestamp += interval) {
       let totalValueForTimestamp = 0;
       const holdingsAtTimestamp = new Map();
-      for (const txn of validTransactions) { // Use the filtered list here too
+      for (const txn of validTransactions) {
         if (new Date(txn.date).getTime() <= timestamp) {
           const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
           let newQty = currentQty;
