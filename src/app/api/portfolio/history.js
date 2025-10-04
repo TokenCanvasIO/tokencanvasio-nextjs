@@ -1,132 +1,138 @@
-import { coinData as staticCoinDataConfig } from '../../config.js';
+const fetch = require('node-fetch');
 
-// This function determines the base URL for API calls.
-const getApiBaseUrl = () => {
-  // In a local dev environment, this will be an empty string,
-  // so requests go to the same origin (e.g., http://localhost:8888)
-  return import.meta.env.VITE_API_BASE_URL || '';
+// --- CONFIGURATION ---
+const TIMEOUT_THRESHOLD_MS = 1000; // Stop processing 1 sec before Netlify's limit
+const MAX_DATA_POINTS = 120; // How many points to calculate for the chart
+
+// Helper function to get the start date based on the timeframe
+const getStartDate = (timeframe) => {
+  const now = new Date();
+  const daysMap = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365, 'All': 1825 }; // 'All' is 5 years
+  const days = daysMap[timeframe] || 365;
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 };
 
-export const API_BASE_URL = getApiBaseUrl();
+// Fetches historical price data for a list of assets from CoinGecko
+const fetchHistoricalPrices = async (assetIds, days) => {
+  const pricePromises = assetIds.map(id => {
+    const coingeckoId = id === 'xrp' ? 'ripple' : id;
+    const url = `https://api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}&interval=daily`;
+    return fetch(url)
+      .then(res => res.json())
+      .then(data => ({ id, prices: data.prices || [] }))
+      .catch(error => {
+        console.warn(`Failed to fetch history for asset: ${id}`, error);
+        return { id, prices: [] }; // Return empty array on failure
+      });
+  });
+  
+  const results = await Promise.all(pricePromises);
+  const priceMap = new Map();
+  results.forEach(result => priceMap.set(result.id, result.prices));
+  return priceMap;
+};
 
-async function fetchFromApi(path, options = {}) {
-  const { method = 'GET', body, params } = options;
-  let urlString = `${API_BASE_URL}${path}`;
-
-  if (params) {
-    Object.keys(params).forEach(key => (params[key] == null) && delete params[key]);
-    const searchParams = new URLSearchParams(params);
-    if (searchParams.toString()) {
-        urlString += `?${searchParams.toString()}`;
+// Finds the closest price for an asset at a specific timestamp
+const findPriceAtTimestamp = (priceHistory, timestamp) => {
+  if (!priceHistory || priceHistory.length === 0) return 0;
+  // Find the last known price before or at the given timestamp
+  let closestPrice = 0;
+  for (const [ts, price] of priceHistory) {
+    if (ts <= timestamp) {
+      closestPrice = price;
+    } else {
+      break; // Prices are sorted, so we can stop
     }
   }
-  const config = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  };
-  if (body) {
-    config.body = JSON.stringify(body);
+  return closestPrice;
+};
+
+
+// --- MAIN FUNCTION HANDLER FOR NETLIFY ---
+exports.handler = async (event, context) => {
+  // Only allow POST requests
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
+  }
+
+  let transactions;
+  let timeframe;
+  try {
+    const body = JSON.parse(event.body);
+    transactions = body.transactions;
+    timeframe = body.timeframe;
+    if (!Array.isArray(transactions)) {
+      throw new Error('"transactions" must be an array.');
+    }
+  } catch (error) {
+    console.error('Error parsing request body:', error);
+    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid request body.', error: error.message }) };
+  }
+  
+  // If there are no transactions, return an empty chart
+  if (transactions.length === 0) {
+    return { statusCode: 200, body: JSON.stringify({ prices: [], volumes: [] }) };
   }
 
   try {
-    const response = await fetch(urlString, config);
-  
-    if (!response.ok) {
-        let errorBody;
-        try {
-            errorBody = await response.json();
-        } catch (e) {
-            errorBody = await response.text();
+    const startDate = getStartDate(timeframe);
+    const endDate = new Date();
+    const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    
+    // 1. Get unique asset IDs and fetch all price histories in parallel
+    const uniqueAssetIds = [...new Set(transactions.map(t => t.assetId))];
+    const historicalPricesMap = await fetchHistoricalPrices(uniqueAssetIds, days);
+
+    // 2. Calculate portfolio value at different points in time
+    const chartData = [];
+    const step = (endDate.getTime() - startDate.getTime()) / MAX_DATA_POINTS;
+
+    for (let i = 0; i <= MAX_DATA_POINTS; i++) {
+      // --- CRITICAL TIMEOUT PROTECTION ---
+      if (context.getRemainingTimeInMillis() < TIMEOUT_THRESHOLD_MS) {
+        console.warn('Approaching timeout, returning partial data.');
+        break; // Exit the loop to avoid a 502 error
+      }
+
+      const currentTimestamp = startDate.getTime() + (i * step);
+      let totalPortfolioValue = 0;
+
+      // For each asset we hold...
+      for (const assetId of uniqueAssetIds) {
+        let currentQuantity = 0;
+        // ...calculate the quantity based on transactions up to this point in time
+        for (const txn of transactions) {
+          if (txn.assetId === assetId && new Date(txn.date).getTime() <= currentTimestamp) {
+            if (txn.type === 'buy' || txn.type === 'transfer') {
+              currentQuantity += txn.quantity;
+            } else if (txn.type === 'sell') {
+              currentQuantity -= txn.quantity;
+            }
+          }
         }
-        throw new Error(errorBody.message || errorBody || `API call failed with status ${response.status}`);
+
+        if (currentQuantity > 0) {
+          const priceHistory = historicalPricesMap.get(assetId);
+          const priceAtTime = findPriceAtTimestamp(priceHistory, currentTimestamp);
+          totalPortfolioValue += currentQuantity * priceAtTime;
+        }
+      }
+      chartData.push([currentTimestamp, totalPortfolioValue]);
     }
     
-    if (response.status === 204) return null;
-    return response.json();
-
-  } catch (error) {
-    console.error(`🔴 API Error fetching ${path}:`, error);
-    throw error;
-  }
-}
-
-// This is the function for the PORTFOLIO CHART
-export const getPortfolioChartData = async (transactions, timeframe) => {
-  if (!transactions || transactions.length === 0) {
-    return { prices: [], volumes: [] };
-  }
-
-  try {
-    // --- THIS IS THE FIX ---
-    // The URL is now /functions/history, which matches our new _redirects rule.
-    const response = await fetch(`${API_BASE_URL}/functions/history`, {
-      method: 'POST',
+    // Return the calculated data
+    return {
+      statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transactions, timeframe }),
-    });
+      body: JSON.stringify({ prices: chartData, volumes: [] }), // Volumes are not calculated for simplicity
+    };
 
-    if (!response.ok) {
-      console.error("Backend API call failed for portfolio history");
-      throw new Error('Failed to fetch portfolio history from backend.');
-    }
-    
-    return await response.json(); 
-    
   } catch (error) {
-    console.error("Error in getPortfolioChartData:", error);
-    return { prices: [], volumes: [], error: error.message };
+    console.error('Error during portfolio calculation:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'An error occurred during calculation.', error: error.message }),
+    };
   }
 };
-
-
-export async function searchCoins({ query, category }) {
-  if (!query || query.trim().length < 2) return [];
-  const endpoint = '/api/coingecko/search';
-  try {
-    const params = { query, category };
-    const data = await fetchFromApi(endpoint, { params });
-    return data;
-  } catch (error) {
-    console.error(`❌ CoinGecko search failed for query: "${query}"`, error);
-    return [];
-  }
-}
-
-export async function getChartData(coinId, timeframe, vsCurrency = 'usd') {
-  const assetInfo = staticCoinDataConfig[coinId] || {};
-  const coinIdForApi = coinId === 'xrp' ? 'ripple' : coinId;
-  
-  if (vsCurrency === 'xrp' && assetInfo.token_issuer) {
-      return getOnTheDexChartData(timeframe, assetInfo);
-  }
-  return getCoinGeckoChartData(coinIdForApi, timeframe, vsCurrency);
-}
-
-async function getCoinGeckoChartData(coinId, timeframe, vsCurrency) {
-  const daysMap = { '4h': '1', '24h': '1', '7d': '7', '30d': '30', 'All': 'max' };
-  try {
-    const path = `/api/coingecko/coins/${coinId}/market_chart`;
-    const params = { vs_currency: vsCurrency, days: daysMap[timeframe] || 'max', precision: 'full' };
-    const result = await fetchFromApi(path, { params });
-    return { prices: result.prices || [], volumes: result.total_volumes || [] };
-  } catch (error) {
-    console.error(`Error fetching CoinGecko chart for ${coinId}:`, error);
-    return { prices: [], volumes: [] };
-  }
-}
-
-async function getOnTheDexChartData(timeframe, coinInfo) {
-    if (!coinInfo.symbol || !coinInfo.token_issuer) return { prices: [], volumes: [] };
-    const apiParams = { '4h': { interval: '15', bars: 16 }, '24h': { interval: '60', bars: 24 }, '7d': { interval: '240', bars: 42 }, '30d': { interval: 'D', bars: 30 }, 'All': { interval: 'D', bars: 400 } }[timeframe] || { interval: 'D', bars: 400 };
-    try {
-        const result = await fetchFromApi('/api/onthedex/ohlc', { params: { base: `${coinInfo.symbol}.${coinInfo.token_issuer}`, quote: 'XRP', ...apiParams } });
-        if (result && result.data && Array.isArray(result.data.ohlc)) {
-            const cleanOhlc = result.data.ohlc.filter(item => item && typeof item.t === 'number' && typeof item.c === 'number');
-            return { prices: cleanOhlc.map(item => [item.t * 1000, item.c]), volumes: cleanOhlc.map(item => [item.t * 1000, item.vb || item.vq || 0]) };
-        }
-        return { prices: [], volumes: [] };
-    } catch (error) {
-        console.error(`Error fetching OnTheDEX chart for ${coinInfo.symbol}:`, error);
-        return { prices: [], volumes: [] };
-    }
-}
