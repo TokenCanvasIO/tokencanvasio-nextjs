@@ -32,8 +32,7 @@ export default async function handler(request, res) {
   }
 
   try {
-    const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-const { transactions, timeframe } = body;
+    const { transactions, timeframe } = JSON.parse(request.body);
 
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
       res.status(200).json({ prices: [], volumes: [] });
