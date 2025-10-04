@@ -1,6 +1,5 @@
-// This is the corrected version for Netlify
+// This is the final, corrected version for Netlify
 
-// Helper function to find the closest price (remains the same)
 const findClosestPrice = (priceData, targetTimestamp) => {
   if (!priceData || priceData.length === 0) return 0;
   let closest = priceData[0];
@@ -15,10 +14,7 @@ const findClosestPrice = (priceData, targetTimestamp) => {
   return closest[1];
 };
 
-// --- THIS IS THE NETLIFY-SPECIFIC CHANGE ---
-// We export a single 'handler' function instead of separate methods.
 export default async function handler(request, res) {
-  // We check the method inside the handler.
   if (request.method !== 'POST') {
     res.status(405).json({ message: 'Method Not Allowed' });
     return;
@@ -33,7 +29,7 @@ export default async function handler(request, res) {
 
   try {
     const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-const { transactions, timeframe } = body;
+    const { transactions, timeframe } = body;
 
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
       res.status(200).json({ prices: [], volumes: [] });
@@ -66,13 +62,21 @@ const { transactions, timeframe } = body;
       let totalValueForTimestamp = 0;
       const holdingsAtTimestamp = new Map();
 
+      // --- THIS IS THE CORRECTED LOGIC ---
+      // It now correctly handles 'buy', 'sell', and 'transfer' types.
       for (const txn of transactions) {
         if (new Date(txn.date).getTime() <= timestamp) {
           const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
-          const newQty = txn.type === 'buy' ? currentQty + txn.quantity : currentQty - txn.quantity;
+          let newQty = currentQty;
+          if (txn.type === 'buy' || txn.type === 'transfer') {
+            newQty += txn.quantity;
+          } else if (txn.type === 'sell') {
+            newQty -= txn.quantity;
+          }
           holdingsAtTimestamp.set(txn.assetId, newQty);
         }
       }
+      // --- END OF FIX ---
 
       for (const [assetId, quantity] of holdingsAtTimestamp.entries()) {
         if (quantity > 0) {
