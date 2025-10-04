@@ -1,8 +1,7 @@
-import { createHash } from 'crypto'; // ADD THIS LINE
+import { createHash } from 'crypto';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// --- Firebase Admin Initialization ---
 let db;
 const initializeFirebase = () => {
   const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -14,7 +13,6 @@ const initializeFirebase = () => {
   db = getFirestore();
 };
 
-// --- Helper functions ---
 const findClosestPrice = (priceData, targetTimestamp) => {
   if (!priceData || priceData.length === 0) return 0;
   let closest = priceData[0];
@@ -29,7 +27,6 @@ const findClosestPrice = (priceData, targetTimestamp) => {
   return closest[1];
 };
 
-// --- Main Handler with Caching ---
 export default async function handler(request, res) {
   if (request.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
@@ -45,19 +42,17 @@ export default async function handler(request, res) {
   try {
     const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
     const { transactions, timeframe } = body;
+    
+    // --- FIX: Filter out any transactions that don't have a valid assetId ---
+    const validTransactions = transactions.filter(txn => txn && txn.assetId);
 
-    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+    if (!validTransactions || validTransactions.length === 0) {
       return res.status(200).json({ prices: [], volumes: [] });
     }
 
-    // --- Caching Logic ---
-    const CACHE_DURATION_SECONDS = 300; // Cache for 5 minutes
-    
-    // --- CHANGED: Create a hash for the cache key ---
-    const rawCacheKey = `portfolio_${JSON.stringify(transactions)}_${timeframe}`;
+    const CACHE_DURATION_SECONDS = 300;
+    const rawCacheKey = `portfolio_${JSON.stringify(validTransactions)}_${timeframe}`;
     const cacheKey = createHash('sha256').update(rawCacheKey).digest('hex');
-    // --- END OF CHANGE ---
-
     const cacheRef = db.collection('portfolio_cache').doc(cacheKey);
     
     const doc = await cacheRef.get();
@@ -65,16 +60,15 @@ export default async function handler(request, res) {
       const { timestamp, jsonData } = doc.data();
       const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
       if (ageSeconds < CACHE_DURATION_SECONDS) {
-        const data = JSON.parse(jsonData);
-        return res.status(200).json(data);
+        return res.status(200).json(JSON.parse(jsonData));
       }
     }
     
-    // --- Calculation Logic (runs only if cache is missed) ---
     const coingeckoApiKey = process.env.COINGECKO_API_KEY;
     if (!coingeckoApiKey) throw new Error("COINGECKO_API_KEY is not defined.");
     
-    const uniqueAssetIds = [...new Set(transactions.map(txn => txn.assetId))];
+    // Use the filtered list from now on
+    const uniqueAssetIds = [...new Set(validTransactions.map(txn => txn.assetId))];
     const days = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365 }[timeframe] || 30;
     
     const pricePromises = uniqueAssetIds.map(id => 
@@ -98,7 +92,7 @@ export default async function handler(request, res) {
     for (let timestamp = startTime; timestamp <= now; timestamp += interval) {
       let totalValueForTimestamp = 0;
       const holdingsAtTimestamp = new Map();
-      for (const txn of transactions) {
+      for (const txn of validTransactions) { // Use the filtered list here too
         if (new Date(txn.date).getTime() <= timestamp) {
           const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
           let newQty = currentQty;
