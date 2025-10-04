@@ -1,6 +1,6 @@
-// This is the corrected version for Netlify
+const fetch = require('node-fetch');
 
-// Helper function to find the closest price (remains the same)
+// Helper function to find the closest price (your original function)
 const findClosestPrice = (priceData, targetTimestamp) => {
   if (!priceData || priceData.length === 0) return 0;
   let closest = priceData[0];
@@ -15,34 +15,44 @@ const findClosestPrice = (priceData, targetTimestamp) => {
   return closest[1];
 };
 
-// --- THIS IS THE NETLIFY-SPECIFIC CHANGE ---
-// We export a single 'handler' function instead of separate methods.
-export default async function handler(request, res) {
-  // We check the method inside the handler.
-  if (request.method !== 'POST') {
-    res.status(405).json({ message: 'Method Not Allowed' });
-    return;
+// --- This is a standard Netlify Function handler ---
+exports.handler = async (event, context) => {
+  // We check the httpMethod from the 'event' object
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Method Not Allowed' }),
+    };
   }
 
   const coingeckoApiKey = process.env.COINGECKO_API_KEY;
   if (!coingeckoApiKey) {
     console.error("FATAL: COINGECKO_API_KEY is not defined.");
-    res.status(500).json({ error: 'Server configuration error' });
-    return;
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Server configuration error' }),
+    };
   }
 
   try {
-    const { transactions, timeframe } = JSON.parse(request.body);
+    // The request body is a string in event.body, so we parse it
+    const { transactions, timeframe } = JSON.parse(event.body);
 
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
-      res.status(200).json({ prices: [], volumes: [] });
-      return;
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prices: [], volumes: [] }),
+      };
     }
 
+    // --- Your original logic starts here, unchanged ---
     const uniqueAssetIds = [...new Set(transactions.map(txn => txn.assetId))];
     const days = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365 }[timeframe] || 30;
     
-    const pricePromises = uniqueAssetIds.map(id => 
+    const pricePromises = uniqueAssetIds.map(id =>
       fetch(`https://pro-api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`, {
         headers: { 'x-cg-pro-api-key': coingeckoApiKey },
       }).then(res => res.json())
@@ -62,13 +72,19 @@ export default async function handler(request, res) {
     const interval = days <= 90 ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 
     for (let timestamp = startTime; timestamp <= now; timestamp += interval) {
+      // --- TIMEOUT PROTECTION ---
+      if (context.getRemainingTimeInMillis() < 1000) {
+          console.warn('Approaching timeout, returning partial data.');
+          break;
+      }
+      
       let totalValueForTimestamp = 0;
       const holdingsAtTimestamp = new Map();
 
       for (const txn of transactions) {
         if (new Date(txn.date).getTime() <= timestamp) {
           const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
-          const newQty = txn.type === 'buy' ? currentQty + txn.quantity : currentQty - txn.quantity;
+          const newQty = txn.type === 'buy' || txn.type === 'transfer' ? currentQty + txn.quantity : currentQty - txn.quantity;
           holdingsAtTimestamp.set(txn.assetId, newQty);
         }
       }
@@ -84,14 +100,25 @@ export default async function handler(request, res) {
       }
       
       if (totalValueForTimestamp > 0 || portfolioHistory.length > 0) {
-         portfolioHistory.push([timestamp, totalValueForTimestamp]);
+          portfolioHistory.push([timestamp, totalValueForTimestamp]);
       }
     }
+    // --- Your original logic ends here ---
 
-    res.status(200).json({ prices: portfolioHistory, volumes: [] });
+    // We return a Netlify-formatted success response
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prices: portfolioHistory, volumes: [] }),
+    };
 
   } catch (error) {
     console.error("Error in portfolio history calculation:", error);
-    res.status(500).json({ message: 'An internal server error occurred.' });
+    // We return a Netlify-formatted error response
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `An internal server error occurred: ${error.message}` }),
+    };
   }
-}
+};
