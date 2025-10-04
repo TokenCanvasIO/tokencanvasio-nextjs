@@ -1,151 +1,132 @@
-import { createHash } from 'crypto';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { coinData as staticCoinDataConfig } from '../../config.js';
 
-let db;
-const initializeFirebase = () => {
-  const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!firebaseKey) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not defined.");
-  const serviceAccount = JSON.parse(firebaseKey);
-  if (getApps().length === 0) {
-    initializeApp({ credential: cert(serviceAccount) });
-  }
-  db = getFirestore();
+// This function determines the base URL for API calls.
+const getApiBaseUrl = () => {
+  // In a local dev environment, this will be an empty string,
+  // so requests go to the same origin (e.g., http://localhost:8888)
+  return import.meta.env.VITE_API_BASE_URL || '';
 };
 
-const findClosestPrice = (priceData, targetTimestamp) => {
-  if (!priceData || priceData.length === 0) return 0;
-  let closest = priceData[0];
-  let minDiff = Math.abs(targetTimestamp - closest[0]);
-  for (let i = 1; i < priceData.length; i++) {
-    const diff = Math.abs(targetTimestamp - priceData[i][0]);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = priceData[i];
+export const API_BASE_URL = getApiBaseUrl();
+
+async function fetchFromApi(path, options = {}) {
+  const { method = 'GET', body, params } = options;
+  let urlString = `${API_BASE_URL}${path}`;
+
+  if (params) {
+    Object.keys(params).forEach(key => (params[key] == null) && delete params[key]);
+    const searchParams = new URLSearchParams(params);
+    if (searchParams.toString()) {
+        urlString += `?${searchParams.toString()}`;
     }
   }
-  return closest[1];
-};
-
-export default async function handler(request, res) {
-  if (request.method !== 'POST') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
+  const config = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body) {
+    config.body = JSON.stringify(body);
   }
 
   try {
-    if (!db) initializeFirebase();
+    const response = await fetch(urlString, config);
+  
+    if (!response.ok) {
+        let errorBody;
+        try {
+            errorBody = await response.json();
+        } catch (e) {
+            errorBody = await response.text();
+        }
+        throw new Error(errorBody.message || errorBody || `API call failed with status ${response.status}`);
+    }
+    
+    if (response.status === 204) return null;
+    return response.json();
+
   } catch (error) {
-    console.error("Firebase Initialization Error:", error.message);
-    return res.status(500).json({ message: 'Server configuration error' });
+    console.error(`🔴 API Error fetching ${path}:`, error);
+    throw error;
+  }
+}
+
+// This is the function for the PORTFOLIO CHART
+export const getPortfolioChartData = async (transactions, timeframe) => {
+  if (!transactions || transactions.length === 0) {
+    return { prices: [], volumes: [] };
   }
 
   try {
-    const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-    const { transactions, timeframe } = body;
-    
-    const validTransactions = transactions.filter(txn => txn && txn.assetId);
-
-    if (!validTransactions || validTransactions.length === 0) {
-      return res.status(200).json({ prices: [], volumes: [] });
-    }
-
-    const CACHE_DURATION_SECONDS = 300;
-    const rawCacheKey = `portfolio_${JSON.stringify(validTransactions)}_${timeframe}`;
-    const cacheKey = createHash('sha256').update(rawCacheKey).digest('hex');
-    const cacheRef = db.collection('portfolio_cache').doc(cacheKey);
-    
-    const doc = await cacheRef.get();
-    if (doc.exists) {
-      const { timestamp, jsonData } = doc.data();
-      const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
-      if (ageSeconds < CACHE_DURATION_SECONDS) {
-        return res.status(200).json(JSON.parse(jsonData));
-      }
-    }
-    
-    const coingeckoApiKey = process.env.COINGECKO_API_KEY;
-    if (!coingeckoApiKey) throw new Error("COINGECKO_API_KEY is not defined.");
-    
-    const uniqueAssetIds = [...new Set(validTransactions.map(txn => txn.assetId))];
-    const days = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365 }[timeframe] || 30;
-    
-    const pricePromises = uniqueAssetIds.map(id => 
-      fetch(`https://pro-api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`, {
-        headers: { 'x-cg-pro-api-key': coingeckoApiKey },
-      }).then(res => res.json())
-    );
-
-    // --- DEFINITIVE FIX: INTERNAL TIMEOUT ---
-    const timeLimit = 9000; // 9 seconds, just under Netlify's 10-second limit
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Function timed out internally')), timeLimit);
+    // --- THIS IS THE FIX ---
+    // The URL is now /functions/history, which matches our new _redirects rule.
+    const response = await fetch(`${API_BASE_URL}/functions/history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions, timeframe }),
     });
+
+    if (!response.ok) {
+      console.error("Backend API call failed for portfolio history");
+      throw new Error('Failed to fetch portfolio history from backend.');
+    }
     
-    let historicalDataResponses;
+    return await response.json(); 
+    
+  } catch (error) {
+    console.error("Error in getPortfolioChartData:", error);
+    return { prices: [], volumes: [], error: error.message };
+  }
+};
+
+
+export async function searchCoins({ query, category }) {
+  if (!query || query.trim().length < 2) return [];
+  const endpoint = '/api/coingecko/search';
+  try {
+    const params = { query, category };
+    const data = await fetchFromApi(endpoint, { params });
+    return data;
+  } catch (error) {
+    console.error(`❌ CoinGecko search failed for query: "${query}"`, error);
+    return [];
+  }
+}
+
+export async function getChartData(coinId, timeframe, vsCurrency = 'usd') {
+  const assetInfo = staticCoinDataConfig[coinId] || {};
+  const coinIdForApi = coinId === 'xrp' ? 'ripple' : coinId;
+  
+  if (vsCurrency === 'xrp' && assetInfo.token_issuer) {
+      return getOnTheDexChartData(timeframe, assetInfo);
+  }
+  return getCoinGeckoChartData(coinIdForApi, timeframe, vsCurrency);
+}
+
+async function getCoinGeckoChartData(coinId, timeframe, vsCurrency) {
+  const daysMap = { '4h': '1', '24h': '1', '7d': '7', '30d': '30', 'All': 'max' };
+  try {
+    const path = `/api/coingecko/coins/${coinId}/market_chart`;
+    const params = { vs_currency: vsCurrency, days: daysMap[timeframe] || 'max', precision: 'full' };
+    const result = await fetchFromApi(path, { params });
+    return { prices: result.prices || [], volumes: result.total_volumes || [] };
+  } catch (error) {
+    console.error(`Error fetching CoinGecko chart for ${coinId}:`, error);
+    return { prices: [], volumes: [] };
+  }
+}
+
+async function getOnTheDexChartData(timeframe, coinInfo) {
+    if (!coinInfo.symbol || !coinInfo.token_issuer) return { prices: [], volumes: [] };
+    const apiParams = { '4h': { interval: '15', bars: 16 }, '24h': { interval: '60', bars: 24 }, '7d': { interval: '240', bars: 42 }, '30d': { interval: 'D', bars: 30 }, 'All': { interval: 'D', bars: 400 } }[timeframe] || { interval: 'D', bars: 400 };
     try {
-      historicalDataResponses = await Promise.race([
-        Promise.all(pricePromises),
-        timeoutPromise
-      ]);
+        const result = await fetchFromApi('/api/onthedex/ohlc', { params: { base: `${coinInfo.symbol}.${coinInfo.token_issuer}`, quote: 'XRP', ...apiParams } });
+        if (result && result.data && Array.isArray(result.data.ohlc)) {
+            const cleanOhlc = result.data.ohlc.filter(item => item && typeof item.t === 'number' && typeof item.c === 'number');
+            return { prices: cleanOhlc.map(item => [item.t * 1000, item.c]), volumes: cleanOhlc.map(item => [item.t * 1000, item.vb || item.vq || 0]) };
+        }
+        return { prices: [], volumes: [] };
     } catch (error) {
-      if (error.message === 'Function timed out internally') {
-        console.warn(`Portfolio history for ${uniqueAssetIds.length} coins took too long. Returning empty data.`);
-        // Gracefully fail by returning an empty chart, which stops the 500 error.
-        return res.status(200).json({ prices: [], volumes: [] });
-      }
-      // If it was a different error, let the main catch block handle it
-      throw error;
+        console.error(`Error fetching OnTheDEX chart for ${coinInfo.symbol}:`, error);
+        return { prices: [], volumes: [] };
     }
-    // --- END OF FIX ---
-
-    const historicalDataMap = new Map();
-    uniqueAssetIds.forEach((id, index) => {
-      if (historicalDataResponses[index]?.prices) {
-        historicalDataMap.set(id, historicalDataResponses[index].prices);
-      }
-    });
-
-    const portfolioHistory = [];
-    const now = Date.now();
-    const startTime = now - days * 24 * 60 * 60 * 1000;
-    const interval = days <= 90 ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-
-    for (let timestamp = startTime; timestamp <= now; timestamp += interval) {
-      let totalValueForTimestamp = 0;
-      const holdingsAtTimestamp = new Map();
-      for (const txn of validTransactions) {
-        if (new Date(txn.date).getTime() <= timestamp) {
-          const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
-          let newQty = currentQty;
-          if (txn.type === 'buy' || txn.type === 'transfer') newQty += txn.quantity;
-          else if (txn.type === 'sell') newQty -= txn.quantity;
-          holdingsAtTimestamp.set(txn.assetId, newQty);
-        }
-      }
-      for (const [assetId, quantity] of holdingsAtTimestamp.entries()) {
-        if (quantity > 0) {
-          const priceData = historicalDataMap.get(assetId);
-          if (priceData) {
-            const price = findClosestPrice(priceData, timestamp);
-            totalValueForTimestamp += quantity * price;
-          }
-        }
-      }
-      if (totalValueForTimestamp > 0 || portfolioHistory.length > 0) {
-         portfolioHistory.push([timestamp, totalValueForTimestamp]);
-      }
-    }
-    const finalData = { prices: portfolioHistory, volumes: [] };
-
-    await cacheRef.set({
-      jsonData: JSON.stringify(finalData),
-      timestamp: new Date(),
-    });
-
-    return res.status(200).json(finalData);
-
-  } catch (error) {
-    console.error("Error in portfolio history calculation:", error);
-    return res.status(500).json({ message: 'An internal server error occurred.' });
-  }
 }
