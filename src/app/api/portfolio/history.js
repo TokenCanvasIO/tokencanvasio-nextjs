@@ -1,5 +1,19 @@
-// This is the final, corrected version for Netlify
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
+// --- ADDED: Firebase Admin Initialization ---
+let db;
+const initializeFirebase = () => {
+  const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!firebaseKey) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not defined.");
+  const serviceAccount = JSON.parse(firebaseKey);
+  if (getApps().length === 0) {
+    initializeApp({ credential: cert(serviceAccount) });
+  }
+  db = getFirestore();
+};
+
+// --- Helper functions ---
 const findClosestPrice = (priceData, targetTimestamp) => {
   if (!priceData || priceData.length === 0) return 0;
   let closest = priceData[0];
@@ -14,17 +28,17 @@ const findClosestPrice = (priceData, targetTimestamp) => {
   return closest[1];
 };
 
+// --- Main Handler with Caching ---
 export default async function handler(request, res) {
   if (request.method !== 'POST') {
-    res.status(405).json({ message: 'Method Not Allowed' });
-    return;
+    return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const coingeckoApiKey = process.env.COINGECKO_API_KEY;
-  if (!coingeckoApiKey) {
-    console.error("FATAL: COINGECKO_API_KEY is not defined.");
-    res.status(500).json({ error: 'Server configuration error' });
-    return;
+  try {
+    if (!db) initializeFirebase();
+  } catch (error) {
+    console.error("Firebase Initialization Error:", error.message);
+    return res.status(500).json({ message: 'Server configuration error' });
   }
 
   try {
@@ -32,10 +46,30 @@ export default async function handler(request, res) {
     const { transactions, timeframe } = body;
 
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
-      res.status(200).json({ prices: [], volumes: [] });
-      return;
+      return res.status(200).json({ prices: [], volumes: [] });
     }
 
+    // --- ADDED: Caching Logic ---
+    const CACHE_DURATION_SECONDS = 300; // Cache for 5 minutes
+    // Create a unique key based on the content of the transactions and timeframe
+    const cacheKey = `portfolio_${JSON.stringify(transactions)}_${timeframe}`;
+    const cacheRef = db.collection('portfolio_cache').doc(cacheKey);
+    
+    const doc = await cacheRef.get();
+    if (doc.exists) {
+      const { timestamp, jsonData } = doc.data();
+      const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
+      if (ageSeconds < CACHE_DURATION_SECONDS) {
+        const data = JSON.parse(jsonData);
+        return res.status(200).json(data); // Return cached data instantly
+      }
+    }
+    // --- End of Caching Logic ---
+
+    const coingeckoApiKey = process.env.COINGECKO_API_KEY;
+    if (!coingeckoApiKey) throw new Error("COINGECKO_API_KEY is not defined.");
+    
+    // --- Original Calculation Logic (runs only if cache is missed) ---
     const uniqueAssetIds = [...new Set(transactions.map(txn => txn.assetId))];
     const days = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365 }[timeframe] || 30;
     
@@ -44,7 +78,6 @@ export default async function handler(request, res) {
         headers: { 'x-cg-pro-api-key': coingeckoApiKey },
       }).then(res => res.json())
     );
-
     const historicalDataResponses = await Promise.all(pricePromises);
     const historicalDataMap = new Map();
     uniqueAssetIds.forEach((id, index) => {
@@ -61,23 +94,15 @@ export default async function handler(request, res) {
     for (let timestamp = startTime; timestamp <= now; timestamp += interval) {
       let totalValueForTimestamp = 0;
       const holdingsAtTimestamp = new Map();
-
-      // --- THIS IS THE CORRECTED LOGIC ---
-      // It now correctly handles 'buy', 'sell', and 'transfer' types.
       for (const txn of transactions) {
         if (new Date(txn.date).getTime() <= timestamp) {
           const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
           let newQty = currentQty;
-          if (txn.type === 'buy' || txn.type === 'transfer') {
-            newQty += txn.quantity;
-          } else if (txn.type === 'sell') {
-            newQty -= txn.quantity;
-          }
+          if (txn.type === 'buy' || txn.type === 'transfer') newQty += txn.quantity;
+          else if (txn.type === 'sell') newQty -= txn.quantity;
           holdingsAtTimestamp.set(txn.assetId, newQty);
         }
       }
-      // --- END OF FIX ---
-
       for (const [assetId, quantity] of holdingsAtTimestamp.entries()) {
         if (quantity > 0) {
           const priceData = historicalDataMap.get(assetId);
@@ -87,16 +112,21 @@ export default async function handler(request, res) {
           }
         }
       }
-      
       if (totalValueForTimestamp > 0 || portfolioHistory.length > 0) {
          portfolioHistory.push([timestamp, totalValueForTimestamp]);
       }
     }
-
-    res.status(200).json({ prices: portfolioHistory, volumes: [] });
+    const finalData = { prices: portfolioHistory, volumes: [] };
+    // --- ADDED: Save the result to the cache before returning ---
+    await cacheRef.set({
+      jsonData: JSON.stringify(finalData),
+      timestamp: new Date(),
+    });
+    // --- End ---
+    return res.status(200).json(finalData);
 
   } catch (error) {
     console.error("Error in portfolio history calculation:", error);
-    res.status(500).json({ message: 'An internal server error occurred.' });
+    return res.status(500).json({ message: 'An internal server error occurred.' });
   }
 }
