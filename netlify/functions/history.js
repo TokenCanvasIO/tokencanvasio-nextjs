@@ -19,11 +19,11 @@ const findPriceAtTimestamp = (priceHistory, timestamp) => {
 
 const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
   const pricePromises = assetIds.map(id => {
-    const coingeckoId = id === 'ripple' ? 'xrp' : id;
-
     // --- THIS IS THE FINAL FIX ---
-    // The `&interval=` parameter has been completely removed.
-    // CoinGecko will automatically return hourly data if `days` is 90 or less.
+    // The CoinGecko ID for XRP is 'ripple'. This line now correctly
+    // converts 'xrp' to 'ripple' before making the API call.
+    const coingeckoId = id === 'xrp' ? 'ripple' : id;
+
     const url = `https://pro-api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`;
     
     return fetch(url, {
@@ -39,8 +39,6 @@ const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
       })
       .then(data => ({ id, prices: data.prices || [] }))
       .catch(error => {
-        // --- THIS IS THE FIX ---
-        // Changed `error..message` to `error.message`
         console.warn(error.message);
         return { id, prices: [] };
       });
