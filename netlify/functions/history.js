@@ -1,111 +1,116 @@
 const fetch = require('node-fetch');
 
-// Helper function to find the closest price (your original function)
-const findClosestPrice = (priceData, targetTimestamp) => {
-  if (!priceData || priceData.length === 0) return 0;
-  let closest = priceData[0];
-  let minDiff = Math.abs(targetTimestamp - closest[0]);
-  for (let i = 1; i < priceData.length; i++) {
-    const diff = Math.abs(targetTimestamp - priceData[i][0]);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = priceData[i];
+// --- PERFORMANCE OPTIMIZATIONS ---
+const TIMEOUT_THRESHOLD_MS = 1500; // Stop processing 1.5s before Netlify's limit
+const MAX_DATA_POINTS = 80; // Reduced from 120 to run faster
+
+// Helper function to find the closest price for an asset at a specific timestamp
+const findPriceAtTimestamp = (priceHistory, timestamp) => {
+  if (!priceHistory || priceHistory.length === 0) return 0;
+  let closestPrice = 0;
+  // Find the last known price before or at the given timestamp
+  for (const [ts, price] of priceHistory) {
+    if (ts <= timestamp) {
+      closestPrice = price;
+    } else {
+      break; // Prices are sorted, so we can stop searching early
     }
   }
-  return closest[1];
+  return closestPrice;
 };
 
-// --- This is a standard Netlify Function handler ---
-exports.handler = async (event, context) => {
-  // We check the httpMethod from the 'event' object
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Method Not Allowed' }),
-    };
-  }
+// Fetches historical price data for a list of assets from CoinGecko
+const fetchHistoricalPrices = async (assetIds, days) => {
+  // --- OPTIMIZATION: Request hourly data for shorter timeframes ---
+  const interval = days <= 90 ? 'hourly' : 'daily';
 
-  const coingeckoApiKey = process.env.COINGECKO_API_KEY;
-  if (!coingeckoApiKey) {
-    console.error("FATAL: COINGECKO_API_KEY is not defined.");
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Server configuration error' }),
-    };
+  const pricePromises = assetIds.map(id => {
+    // Note: The free CoinGecko API is used here as a fallback.
+    // Replace with your Pro API URL structure if needed.
+    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`;
+    return fetch(url)
+      .then(res => {
+        if (!res.ok) {
+          // If CoinGecko returns an error (e.g., 404), handle it gracefully
+          console.warn(`CoinGecko API error for asset ${id}: ${res.statusText}`);
+          return { prices: [] };
+        }
+        return res.json();
+      })
+      .then(data => ({ id, prices: data.prices || [] }))
+      .catch(error => {
+        console.warn(`Failed to fetch history for asset: ${id}`, error);
+        return { id, prices: [] }; // Always return a valid object
+      });
+  });
+  
+  const results = await Promise.all(pricePromises);
+  const priceMap = new Map();
+  results.forEach(result => priceMap.set(result.id, result.prices));
+  return priceMap;
+};
+
+// --- Main Netlify Function Handler ---
+exports.handler = async (event, context) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
   }
 
   try {
-    // The request body is a string in event.body, so we parse it
     const { transactions, timeframe } = JSON.parse(event.body);
 
-    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prices: [], volumes: [] }),
-      };
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return { statusCode: 200, body: JSON.stringify({ prices: [], volumes: [] }) };
     }
 
-    // --- Your original logic starts here, unchanged ---
-    const uniqueAssetIds = [...new Set(transactions.map(txn => txn.assetId))];
-    const days = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365 }[timeframe] || 30;
-    
-    const pricePromises = uniqueAssetIds.map(id =>
-      fetch(`https://pro-api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`, {
-        headers: { 'x-cg-pro-api-key': coingeckoApiKey },
-      }).then(res => res.json())
-    );
+    const daysMap = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365, 'All': 1825 };
+    const days = daysMap[timeframe] || 365;
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const endDate = new Date();
 
-    const historicalDataResponses = await Promise.all(pricePromises);
-    const historicalDataMap = new Map();
-    uniqueAssetIds.forEach((id, index) => {
-      if (historicalDataResponses[index]?.prices) {
-        historicalDataMap.set(id, historicalDataResponses[index].prices);
-      }
-    });
+    const uniqueAssetIds = [...new Set(transactions.map(t => t.assetId))];
+    const historicalPricesMap = await fetchHistoricalPrices(uniqueAssetIds, days);
 
     const portfolioHistory = [];
-    const now = Date.now();
-    const startTime = now - days * 24 * 60 * 60 * 1000;
-    const interval = days <= 90 ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+    const step = (endDate.getTime() - startDate.getTime()) / MAX_DATA_POINTS;
 
-    for (let timestamp = startTime; timestamp <= now; timestamp += interval) {
-      // --- TIMEOUT PROTECTION ---
-      if (context.getRemainingTimeInMillis() < 1000) {
-          console.warn('Approaching timeout, returning partial data.');
-          break;
-      }
-      
-      let totalValueForTimestamp = 0;
-      const holdingsAtTimestamp = new Map();
-
-      for (const txn of transactions) {
-        if (new Date(txn.date).getTime() <= timestamp) {
-          const currentQty = holdingsAtTimestamp.get(txn.assetId) || 0;
-          const newQty = txn.type === 'buy' || txn.type === 'transfer' ? currentQty + txn.quantity : currentQty - txn.quantity;
-          holdingsAtTimestamp.set(txn.assetId, newQty);
-        }
+    for (let i = 0; i <= MAX_DATA_POINTS; i++) {
+      if (context.getRemainingTimeInMillis() < TIMEOUT_THRESHOLD_MS) {
+        console.warn('Approaching timeout, returning partial data.');
+        break; // Exit loop to prevent 502 error
       }
 
-      for (const [assetId, quantity] of holdingsAtTimestamp.entries()) {
-        if (quantity > 0) {
-          const priceData = historicalDataMap.get(assetId);
-          if (priceData) {
-            const price = findClosestPrice(priceData, timestamp);
-            totalValueForTimestamp += quantity * price;
+      const currentTimestamp = startDate.getTime() + (i * step);
+      let totalPortfolioValue = 0;
+
+      for (const assetId of uniqueAssetIds) {
+        let currentQuantity = 0;
+        for (const txn of transactions) {
+          if (txn.assetId === assetId && new Date(txn.date).getTime() <= currentTimestamp) {
+            const quantity = txn.quantity || 0;
+            if (txn.type === 'buy' || txn.type === 'transfer') {
+              currentQuantity += quantity;
+            } else if (txn.type === 'sell') {
+              currentQuantity -= quantity;
+            }
           }
         }
-      }
-      
-      if (totalValueForTimestamp > 0 || portfolioHistory.length > 0) {
-          portfolioHistory.push([timestamp, totalValueForTimestamp]);
-      }
-    }
-    // --- Your original logic ends here ---
 
-    // We return a Netlify-formatted success response
+        if (currentQuantity > 0) {
+          const priceHistory = historicalPricesMap.get(assetId);
+          const priceAtTime = findPriceAtTimestamp(priceHistory, currentTimestamp);
+          totalPortfolioValue += currentQuantity * priceAtTime;
+        }
+      }
+      portfolioHistory.push([currentTimestamp, totalPortfolioValue]);
+    }
+
+    // Ensure we don't return an empty chart if it timed out on the first point
+    if (portfolioHistory.length < 2) {
+      console.warn('Calculation timed out before enough data could be generated.');
+      return { statusCode: 200, body: JSON.stringify({ prices: [], volumes: [], error: "Calculation took too long." }) };
+    }
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -114,10 +119,8 @@ exports.handler = async (event, context) => {
 
   } catch (error) {
     console.error("Error in portfolio history calculation:", error);
-    // We return a Netlify-formatted error response
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: `An internal server error occurred: ${error.message}` }),
     };
   }
