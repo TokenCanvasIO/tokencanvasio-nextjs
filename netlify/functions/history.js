@@ -19,10 +19,7 @@ const findPriceAtTimestamp = (priceHistory, timestamp) => {
 
 const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
   const pricePromises = assetIds.map(id => {
-    // The CoinGecko ID for XRP is 'ripple'. This line now correctly
-    // converts 'xrp' to 'ripple' before making the API call.
     const coingeckoId = id === 'xrp' ? 'ripple' : id;
-
     const url = `https://pro-api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`;
     
     return fetch(url, {
@@ -64,18 +61,19 @@ exports.handler = async (event, context) => {
     const { transactions, timeframe } = JSON.parse(event.body);
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
-      return { statusCode: 200, body: JSON.stringify({ prices: [], volumes: [] }) };
+      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [] }) };
     }
 
-    const daysMap = { '24H': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365, 'All': 1825 };
-    const days = daysMap[timeframe] || 365;
+    const daysMap = { '24h': 1, '7d': 7, '30d': 30, '3m': 90, '1y': 365, 'all': 1825 };
+    const days = daysMap[timeframe.toLowerCase()] || 365;
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const endDate = new Date();
 
     const uniqueAssetIds = [...new Set(transactions.map(t => t.assetId))];
     const historicalPricesMap = await fetchHistoricalPrices(uniqueAssetIds, days, coingeckoApiKey);
 
-    const portfolioHistory = [];
+    const pnlHistory = [];
+    const valueHistory = [];
     const step = (endDate.getTime() - startDate.getTime()) / MAX_DATA_POINTS;
 
     for (let i = 0; i <= MAX_DATA_POINTS; i++) {
@@ -86,42 +84,55 @@ exports.handler = async (event, context) => {
 
       const currentTimestamp = startDate.getTime() + (i * step);
       let totalPortfolioValue = 0;
+      let totalCostBasis = 0; // --- NEW: Variable to track total cost basis
 
       for (const assetId of uniqueAssetIds) {
         let currentQuantity = 0;
+        let totalBuyCost = 0;    // --- NEW: Track cost of buys for this asset
+        let totalBuyQuantity = 0; // --- NEW: Track quantity of buys for this asset
+
+        // --- UPDATED: This inner loop now calculates cost basis as well ---
         for (const txn of transactions) {
           if (txn.assetId === assetId && new Date(txn.date).getTime() <= currentTimestamp) {
             const quantity = txn.quantity || 0;
-            if (txn.type === 'buy' || txn.type === 'transfer') {
+            if (txn.type === 'buy') {
               currentQuantity += quantity;
+              totalBuyQuantity += quantity;
+              totalBuyCost += quantity * (txn.pricePerCoin || 0);
             } else if (txn.type === 'sell') {
               currentQuantity -= quantity;
+            } else if (txn.type === 'transfer') {
+              // Transfers in add to quantity but not cost basis
+              currentQuantity += quantity;
             }
           }
         }
 
-        if (currentQuantity > 0) {
+        if (currentQuantity > 0.0000001) {
+          // --- NEW: Calculate the average buy price to determine the cost basis of the current holdings ---
+          const averageBuyPrice = totalBuyQuantity > 0 ? totalBuyCost / totalBuyQuantity : 0;
+          const assetCostBasis = currentQuantity * averageBuyPrice;
+          totalCostBasis += assetCostBasis;
+
           const priceHistory = historicalPricesMap.get(assetId);
           const priceAtTime = findPriceAtTimestamp(priceHistory, currentTimestamp);
           totalPortfolioValue += currentQuantity * priceAtTime;
         }
       }
-      portfolioHistory.push([currentTimestamp, totalPortfolioValue]);
+      
+      const pnl = totalPortfolioValue - totalCostBasis; // --- NEW: The actual PNL calculation
+      pnlHistory.push([currentTimestamp, pnl]);
+      valueHistory.push([currentTimestamp, totalPortfolioValue]);
     }
 
-    if (portfolioHistory.length < 2) {
-      return { statusCode: 200, body: JSON.stringify({ prices: [], volumes: [], error: "Calculation took too long or API calls failed." }) };
+    if (pnlHistory.length < 2) {
+      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [], error: "Calculation took too long or API calls failed." }) };
     }
-
-    // --- THIS IS THE FIX ---
-    // Create a dummy 'volumes' array to match the 'prices' array structure.
-    // This ensures the frontend ChartComponent will render the data correctly.
-    const volumes = portfolioHistory.map(([timestamp, _]) => [timestamp, 0]);
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prices: portfolioHistory, volumes: volumes }),
+      body: JSON.stringify({ pnl: pnlHistory, value: valueHistory }), // --- UPDATED: Return both PNL and total value
     };
 
   } catch (error) {
