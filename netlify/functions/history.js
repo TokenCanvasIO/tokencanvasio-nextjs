@@ -19,7 +19,6 @@ const findPriceAtTimestamp = (priceHistory, timestamp) => {
 
 const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
   const pricePromises = assetIds.map(id => {
-    // --- THIS IS THE FINAL FIX ---
     // The CoinGecko ID for XRP is 'ripple'. This line now correctly
     // converts 'xrp' to 'ripple' before making the API call.
     const coingeckoId = id === 'xrp' ? 'ripple' : id;
@@ -114,10 +113,15 @@ exports.handler = async (event, context) => {
       return { statusCode: 200, body: JSON.stringify({ prices: [], volumes: [], error: "Calculation took too long or API calls failed." }) };
     }
 
+    // --- THIS IS THE FIX ---
+    // Create a dummy 'volumes' array to match the 'prices' array structure.
+    // This ensures the frontend ChartComponent will render the data correctly.
+    const volumes = portfolioHistory.map(([timestamp, _]) => [timestamp, 0]);
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prices: portfolioHistory, volumes: [] }),
+      body: JSON.stringify({ prices: portfolioHistory, volumes: volumes }),
     };
 
   } catch (error) {
