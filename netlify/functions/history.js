@@ -39,7 +39,9 @@ const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
       })
       .then(data => ({ id, prices: data.prices || [] }))
       .catch(error => {
-        console.warn(error..message);
+        // --- THIS IS THE FIX ---
+        // Changed `error..message` to `error.message`
+        console.warn(error.message);
         return { id, prices: [] };
       });
   });
