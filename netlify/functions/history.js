@@ -61,19 +61,38 @@ exports.handler = async (event, context) => {
     const { transactions, timeframe } = JSON.parse(event.body);
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
-      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [] }) };
+      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [], cost: [] }) };
     }
 
-    const daysMap = { '24h': 1, '7d': 7, '30d': 30, '3m': 90, '1y': 365, 'all': 1825 };
+    const firstTransactionTimestamp = transactions.reduce((earliest, txn) => {
+        const txnTimestamp = new Date(txn.date).getTime();
+        return Math.min(earliest, txnTimestamp);
+    }, Date.now());
+
+    const daysMap = { '24h': 1, '7d': 7, '30d': 30, '3m': 90, '1y': 365, 'all': 'max' };
     const days = daysMap[timeframe.toLowerCase()] || 365;
-    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    let startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    if (startDate.getTime() < firstTransactionTimestamp) {
+        startDate = new Date(firstTransactionTimestamp);
+    }
+    if (days === 'max') {
+        startDate = new Date(firstTransactionTimestamp);
+    }
+    
     const endDate = new Date();
+    if (startDate.getTime() >= endDate.getTime()) {
+      startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+    }
+    
+    const adjustedDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
     const uniqueAssetIds = [...new Set(transactions.map(t => t.assetId))];
-    const historicalPricesMap = await fetchHistoricalPrices(uniqueAssetIds, days, coingeckoApiKey);
+    const historicalPricesMap = await fetchHistoricalPrices(uniqueAssetIds, adjustedDays > 0 ? adjustedDays : 1, coingeckoApiKey);
 
     const pnlHistory = [];
     const valueHistory = [];
+    const costHistory = [];
     const step = (endDate.getTime() - startDate.getTime()) / MAX_DATA_POINTS;
 
     for (let i = 0; i <= MAX_DATA_POINTS; i++) {
@@ -84,14 +103,13 @@ exports.handler = async (event, context) => {
 
       const currentTimestamp = startDate.getTime() + (i * step);
       let totalPortfolioValue = 0;
-      let totalCostBasis = 0; // --- NEW: Variable to track total cost basis
+      let totalCostBasis = 0;
 
       for (const assetId of uniqueAssetIds) {
         let currentQuantity = 0;
-        let totalBuyCost = 0;    // --- NEW: Track cost of buys for this asset
-        let totalBuyQuantity = 0; // --- NEW: Track quantity of buys for this asset
+        let totalBuyCost = 0;
+        let totalBuyQuantity = 0;
 
-        // --- UPDATED: This inner loop now calculates cost basis as well ---
         for (const txn of transactions) {
           if (txn.assetId === assetId && new Date(txn.date).getTime() <= currentTimestamp) {
             const quantity = txn.quantity || 0;
@@ -102,14 +120,12 @@ exports.handler = async (event, context) => {
             } else if (txn.type === 'sell') {
               currentQuantity -= quantity;
             } else if (txn.type === 'transfer') {
-              // Transfers in add to quantity but not cost basis
               currentQuantity += quantity;
             }
           }
         }
 
         if (currentQuantity > 0.0000001) {
-          // --- NEW: Calculate the average buy price to determine the cost basis of the current holdings ---
           const averageBuyPrice = totalBuyQuantity > 0 ? totalBuyCost / totalBuyQuantity : 0;
           const assetCostBasis = currentQuantity * averageBuyPrice;
           totalCostBasis += assetCostBasis;
@@ -120,19 +136,25 @@ exports.handler = async (event, context) => {
         }
       }
       
-      const pnl = totalPortfolioValue - totalCostBasis; // --- NEW: The actual PNL calculation
+      let pnl = totalPortfolioValue - totalCostBasis;
+      
+      if (i === 0) {
+        pnl = 0;
+      }
+
       pnlHistory.push([currentTimestamp, pnl]);
       valueHistory.push([currentTimestamp, totalPortfolioValue]);
+      costHistory.push([currentTimestamp, totalCostBasis]);
     }
 
     if (pnlHistory.length < 2) {
-      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [], error: "Calculation took too long or API calls failed." }) };
+      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [], cost: [], error: "Not enough data to render chart." }) };
     }
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pnl: pnlHistory, value: valueHistory }), // --- UPDATED: Return both PNL and total value
+      body: JSON.stringify({ pnl: pnlHistory, value: valueHistory, cost: costHistory }),
     };
 
   } catch (error) {
