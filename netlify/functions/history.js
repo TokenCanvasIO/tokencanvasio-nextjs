@@ -18,11 +18,13 @@ const findPriceAtTimestamp = (priceHistory, timestamp) => {
 };
 
 const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
-  const interval = days <= 90 ? 'hourly' : 'daily';
-
   const pricePromises = assetIds.map(id => {
     const coingeckoId = id === 'ripple' ? 'xrp' : id;
-    const url = `https://pro-api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`;
+
+    // --- THIS IS THE FINAL FIX ---
+    // The `&interval=` parameter has been completely removed.
+    // CoinGecko will automatically return hourly data if `days` is 90 or less.
+    const url = `https://pro-api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`;
     
     return fetch(url, {
       headers: { 'x-cg-pro-api-key': apiKey },
@@ -37,7 +39,7 @@ const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
       })
       .then(data => ({ id, prices: data.prices || [] }))
       .catch(error => {
-        console.warn(error.message);
+        console.warn(error..message);
         return { id, prices: [] };
       });
   });
@@ -54,13 +56,7 @@ exports.handler = async (event, context) => {
   }
 
   const coingeckoApiKey = process.env.COINGECKO_API_KEY;
-
-  // --- KEY DEBUGGING CHANGE ---
-  // This will log a masked version of the key to prove if it's being read.
-  if (coingeckoApiKey) {
-    const maskedKey = `${coingeckoApiKey.substring(0, 6)}...${coingeckoApiKey.substring(coingeckoApiKey.length - 4)}`;
-    console.log(`Authenticating with Key: ${maskedKey}`);
-  } else {
+  if (!coingeckoApiKey) {
     console.error("FATAL: COINGECKO_API_KEY environment variable was not found or is empty.");
     return { statusCode: 500, body: JSON.stringify({ message: 'Server configuration error: API key is missing.' }) };
   }
