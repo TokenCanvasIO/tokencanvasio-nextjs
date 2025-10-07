@@ -1,4 +1,3 @@
-// src/components/pages/Faq.jsx
 import React from 'react';
 import DocNavigator from '@/components/DocNavigator'; // 1. Import the navigator
 
@@ -60,6 +59,24 @@ const Faq = () => {
         <p>
            <em><strong>How it works:</strong> When you enable this feature, the app maintains a public-safe version of your canvas in our database that is linked to your user ID. This public version is automatically synced with your private canvas when you save, ensuring viewers always see the latest version.</em>
         </p>
+      </PolicySection>
+
+      {/* --- THIS IS THE NEW SECTION --- */}
+      <PolicySection title="How do I install the TokenCanvas App?">
+        <p>
+          TokenCanvas is a Progressive Web App (PWA), which means you can install it directly to your device's home screen without needing an app store. This gives you a fast, native-app-like experience.
+        </p>
+        <ul className="list-disc list-inside ml-4 space-y-2">
+            <li>
+              <strong>On iOS (iPhone/iPad):</strong> Tap the "Share" button in Safari's toolbar, then scroll down and select "Add to Home Screen."
+            </li>
+            <li>
+              <strong>On Android (Chrome):</strong> Tap the three-dot menu icon, then select "Install app" or "Add to Home screen."
+            </li>
+             <li>
+              <strong>On Desktop (Chrome/Edge):</strong> Look for an "Install" icon that appears on the right side of the address bar.
+            </li>
+        </ul>
       </PolicySection>
 
       <PolicySection title="How do I add assets to my canvas?">

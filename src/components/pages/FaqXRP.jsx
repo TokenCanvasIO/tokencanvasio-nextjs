@@ -1,4 +1,3 @@
-// src/components/pages/FaqXRP.jsx
 import React from 'react';
 import DocNavigator from '@/components/DocNavigator'; // 1. Import the navigator
 
@@ -60,6 +59,24 @@ const FaqXRP = () => {
         </p>
       </PolicySection>
       
+      {/* --- THIS IS THE NEW SECTION --- */}
+      <PolicySection title="How do I install the App?">
+        <p>
+          This site is a Progressive Web App (PWA), which means you can install it directly to your device's home screen without needing an app store. This gives you a fast, native-app-like experience.
+        </p>
+        <ul className="list-disc list-inside ml-4 space-y-2">
+            <li>
+              <strong>On iOS (iPhone/iPad):</strong> Tap the "Share" button in Safari's toolbar, then scroll down and select "Add to Home Screen."
+            </li>
+            <li>
+              <strong>On Android (Chrome):</strong> Tap the three-dot menu icon, then select "Install app" or "Add to Home screen."
+            </li>
+             <li>
+              <strong>On Desktop (Chrome/Edge):</strong> Look for an "Install" icon that appears on the right side of the address bar.
+            </li>
+        </ul>
+      </PolicySection>
+
       <PolicySection title="Why did the bubbles stop moving?">
         <p>
           To conserve resources, the physics engine will "go to sleep" after a period of inactivity. You can wake them up by clicking the <strong>Restart Simulation</strong> button (🔄) in the floating control bar.
@@ -74,7 +91,7 @@ const FaqXRP = () => {
 
       <PolicySection title="Is this financial advice?">
         <p>
-          <strong>No. Absolutely not.</strong> All data on this site is for informational and entertainment purposes only. Always conduct your own research and consult with a qualified professional before making investment decisions.
+          <strong>No. Absolutely not.</strong> All data on this site is for informational and entertainment purposes only. Always conduct your own research and consult with a qualified professional before making any investment decisions.
         </p>
       </PolicySection>
       
