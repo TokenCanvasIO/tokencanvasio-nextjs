@@ -1,6 +1,6 @@
 // src/brandConfig.js
 
-const brands = {
+export const brands = {
   xrp: {
     key: 'xrp',
     logo: '/assets/drop-logo1.png',
@@ -9,7 +9,7 @@ const brands = {
     meta: {
       url: 'https://xrpmemecoins.com',
       title: 'XRP MemeCoins | Real-Time XRPL MemeCoins Data Visualizer',
-    },
+    },  
     navLinks: [
       { key: 'about', path: '/about', label: 'About' },
       { key: 'blog', path: '/blog', label: 'Blog' },
