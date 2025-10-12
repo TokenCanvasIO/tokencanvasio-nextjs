@@ -27,7 +27,7 @@ export const BrandProvider = ({ children }) => {
   return (
     <BrandContext.Provider value={brandConfig}>
       {children}
-    </Brand-Context.Provider>
+    </BrandContext.Provider>
   );
 };
 
