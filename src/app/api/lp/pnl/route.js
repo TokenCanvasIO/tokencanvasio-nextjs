@@ -1,4 +1,5 @@
 // app/api/lp/pnl/route.js
+// Calculate PnL for LP position
 import { NextResponse } from 'next/server';
 import { lpTracker } from '@/lib/lp-tracking';
 
@@ -16,18 +17,14 @@ export async function GET(request) {
       );
     }
     
-    // NOTE: calculatePnL is not in your lp-tracking.js yet.
-    // This file is ready for when you add that function.
-    // const pnl = await lpTracker.calculatePnL(userAccount, ammAccount, depositTx);
+    const pnl = await lpTracker.calculatePnL(userAccount, ammAccount, depositTx);
     
     return NextResponse.json({
-      message: "PnL endpoint is set up.",
       userAccount,
       ammAccount,
-      // pnl,
+      pnl,
       fetchedAt: new Date().toISOString()
     });
-    
   } catch (error) {
     console.error('Error calculating PnL:', error);
     return NextResponse.json({

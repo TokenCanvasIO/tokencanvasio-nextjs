@@ -1,4 +1,5 @@
 // app/api/lp/history/route.js
+// Get LP position history
 import { NextResponse } from 'next/server';
 import { lpTracker } from '@/lib/lp-tracking';
 
@@ -12,23 +13,19 @@ export async function GET(request) {
       return NextResponse.json(
         { error: 'User account and pool account are required' },
         { status: 400 }
-      );
+      ); 
     }
     
-    // NOTE: getPositionHistory and calculateFeesEarned are not in your lp-tracking.js yet.
-    // This file is ready for when you add those functions.
-    // const history = await lpTracker.getPositionHistory(userAccount, ammAccount);
-    // const feesEarned = await lpTracker.calculateFeesEarned(userAccount, ammAccount);
+    const history = await lpTracker.getPositionHistory(userAccount, ammAccount);
+    const feesEarned = await lpTracker.calculateFeesEarned(userAccount, ammAccount);
     
     return NextResponse.json({
-      message: "History endpoint is set up.",
       userAccount,
       ammAccount,
-      // history,
-      // feesEarned,
+      history,
+      feesEarned,
       fetchedAt: new Date().toISOString()
     });
-    
   } catch (error) {
     console.error('Error fetching LP history:', error);
     return NextResponse.json({

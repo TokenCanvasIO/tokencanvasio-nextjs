@@ -1,5 +1,6 @@
 // lib/lp-tracking.js
 import { ensureConnected } from './xrpl-helpers';
+
 class LPTracker {
   async getUserLPPositions(userAccount) {
     try {
@@ -9,28 +10,36 @@ class LPTracker {
         account: userAccount,
         ledger_index: 'validated'
       });
+      
       const lines = response.result.lines || [];
       const lpTokens = lines.filter(line => line.currency.startsWith('03') || line.currency.length === 40);
       const positions = await Promise.all(lpTokens.map(token => this.enrichLPPosition(client, userAccount, token)));
+      
       return positions.filter(p => p !== null);
     } catch (error) {
       console.error('Error getting LP positions:', error);
       return [];
     }
   }
+
   async enrichLPPosition(client, userAccount, lpToken) {
     try {
       const ammAccount = lpToken.account;
       const ammInfo = await client.request({ command: 'amm_info', amm_account: ammAccount });
+      
       if (!ammInfo.result.amm) return null;
+      
       const amm = ammInfo.result.amm;
       const userBalance = parseFloat(lpToken.balance);
       const totalLPTokens = parseFloat(amm.lp_token.value);
       const sharePercentage = (userBalance / totalLPTokens) * 100;
+      
       const asset1Amount = this.parseAmount(amm.amount);
       const asset2Amount = this.parseAmount(amm.amount2);
+      
       const userAsset1 = (asset1Amount.value * userBalance) / totalLPTokens;
       const userAsset2 = (asset2Amount.value * userBalance) / totalLPTokens;
+      
       return {
         ammAccount,
         lpTokenBalance: userBalance,
@@ -45,6 +54,189 @@ class LPTracker {
       return null;
     }
   }
+
+  async getPositionSummary(userAccount) {
+    try {
+      const positions = await this.getUserLPPositions(userAccount);
+      
+      if (positions.length === 0) {
+        return {
+          totalPositions: 0,
+          totalValueUSD: 0,
+          totalLPTokens: 0,
+          averageSharePercentage: 0
+        };
+      }
+      
+      const totalLPTokens = positions.reduce((sum, pos) => sum + pos.lpTokenBalance, 0);
+      const averageSharePercentage = positions.reduce((sum, pos) => sum + pos.sharePercentage, 0) / positions.length;
+      
+      return {
+        totalPositions: positions.length,
+        totalValueUSD: 0,
+        totalLPTokens,
+        averageSharePercentage
+      };
+    } catch (error) {
+      console.error('Error getting position summary:', error);
+      return {
+        totalPositions: 0,
+        totalValueUSD: 0,
+        totalLPTokens: 0,
+        averageSharePercentage: 0
+      };
+    }
+  }
+
+  async getRecommendedPools(userAccount) {
+    try {
+      const currentPositions = await this.getUserLPPositions(userAccount);
+      const currentPoolAccounts = new Set(currentPositions.map(p => p.ammAccount));
+      
+      return {
+        recommended: [],
+        message: "Recommendation engine coming soon"
+      };
+    } catch (error) {
+      console.error('Error getting recommended pools:', error);
+      return {
+        recommended: [],
+        message: "Error fetching recommendations"
+      };
+    }
+  }
+
+  // Replace the old getPositionHistory function in lib/lp-tracking.js with this one
+
+  async getPositionHistory(userAccount, ammAccount) {
+    try {
+      const client = await ensureConnected();
+      
+      const response = await client.request({
+        command: 'account_tx',
+        account: userAccount,
+        ledger_index_min: -1,
+        ledger_index_max: -1,
+        limit: 200 // Look at more recent transactions
+      });
+      
+      const transactions = response.result.transactions || [];
+      
+      const history = transactions
+        .map(tx => {
+          if (!tx.meta || !tx.tx) return null;
+
+          const txType = tx.tx.TransactionType;
+          if (txType !== 'AMMDeposit' && txType !== 'AMMWithdraw' && txType !== 'AMMBid') {
+            return null;
+          }
+
+          // Check if this transaction affected the AMM we care about
+          const affectedNodes = tx.meta.AffectedNodes || [];
+          const isRelevant = affectedNodes.some(node => {
+            const ammNode = node.ModifiedNode || node.CreatedNode || node.DeletedNode;
+            return ammNode?.LedgerEntryType === 'AMM' && ammNode?.FinalFields?.Account === ammAccount;
+          });
+
+          if (!isRelevant) {
+            return null;
+          }
+
+          // Return structured data for relevant transactions
+          return {
+            hash: tx.tx.hash,
+            type: tx.tx.TransactionType,
+            date: tx.tx.date ? new Date((tx.tx.date + 946684800) * 1000).toISOString() : null,
+            ledgerIndex: tx.tx.ledger_index,
+            lpTokens: tx.meta.delivered_amount || tx.tx.LPTokenOut || tx.tx.LPTokenIn || null
+          };
+        })
+        .filter(item => item !== null); // Filter out irrelevant transactions
+      
+      return history;
+
+    } catch (error) {
+      console.error('Error getting position history:', error);
+      return [];
+    }
+  }
+
+  async calculateFeesEarned(userAccount, ammAccount) {
+    try {
+      const positions = await this.getUserLPPositions(userAccount);
+      const currentPosition = positions.find(p => p.ammAccount === ammAccount);
+      
+      if (!currentPosition) {
+        return {
+          totalFeesUSD: 0,
+          estimatedAPY: 0,
+          message: "No active position found"
+        };
+      }
+      
+      return {
+        totalFeesUSD: 0,
+        estimatedAPY: 0,
+        message: "Fee calculation coming soon",
+        sharePercentage: currentPosition.sharePercentage
+      };
+    } catch (error) {
+      console.error('Error calculating fees earned:', error);
+      return {
+        totalFeesUSD: 0,
+        estimatedAPY: 0,
+        message: "Error calculating fees"
+      };
+    }
+  }
+
+  async calculatePnL(userAccount, ammAccount, depositTx) {
+    try {
+      const positions = await this.getUserLPPositions(userAccount);
+      const currentPosition = positions.find(p => p.ammAccount === ammAccount);
+      
+      if (!currentPosition) {
+        return {
+          unrealizedPnL: 0,
+          unrealizedPnLPercent: 0,
+          message: "No active position found"
+        };
+      }
+      
+      let initialDeposit = null;
+      if (depositTx) {
+        try {
+          const client = await ensureConnected();
+          const txResponse = await client.request({
+            command: 'tx',
+            transaction: depositTx
+          });
+          initialDeposit = txResponse.result;
+        } catch (txError) {
+          console.error('Error fetching deposit transaction:', txError);
+        }
+      }
+      
+      return {
+        unrealizedPnL: 0,
+        unrealizedPnLPercent: 0,
+        currentValue: {
+          asset1: currentPosition.asset1.userAmount,
+          asset2: currentPosition.asset2.userAmount
+        },
+        message: "Full PnL calculation coming soon",
+        hasDepositData: !!initialDeposit
+      };
+    } catch (error) {
+      console.error('Error calculating PnL:', error);
+      return {
+        unrealizedPnL: 0,
+        unrealizedPnLPercent: 0,
+        message: "Error calculating PnL"
+      };
+    }
+  }
+
   parseAmount(amount) {
     if (typeof amount === 'string') {
       return { currency: 'XRP', value: Number(amount) / 1_000_000, issuer: null };
@@ -52,4 +244,5 @@ class LPTracker {
     return { currency: amount.currency, value: Number(amount.value), issuer: amount.issuer };
   }
 }
+
 export const lpTracker = new LPTracker();
