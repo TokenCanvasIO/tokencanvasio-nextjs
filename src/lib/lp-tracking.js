@@ -1,5 +1,5 @@
 // lib/lp-tracking.js
-import { ensureConnected } from './xrpl-helpers';
+import { ensureConnected } from '@/lib/xrpl-helpers';
 
 class LPTracker {
   async getUserLPPositions(userAccount) {
@@ -56,57 +56,22 @@ class LPTracker {
   }
 
   async getPositionSummary(userAccount) {
-    try {
-      const positions = await this.getUserLPPositions(userAccount);
-      
-      if (positions.length === 0) {
-        return {
-          totalPositions: 0,
-          totalValueUSD: 0,
-          totalLPTokens: 0,
-          averageSharePercentage: 0
-        };
-      }
-      
-      const totalLPTokens = positions.reduce((sum, pos) => sum + pos.lpTokenBalance, 0);
-      const averageSharePercentage = positions.reduce((sum, pos) => sum + pos.sharePercentage, 0) / positions.length;
-      
-      return {
-        totalPositions: positions.length,
-        totalValueUSD: 0,
-        totalLPTokens,
-        averageSharePercentage
-      };
-    } catch (error) {
-      console.error('Error getting position summary:', error);
-      return {
-        totalPositions: 0,
-        totalValueUSD: 0,
-        totalLPTokens: 0,
-        averageSharePercentage: 0
-      };
-    }
+    // This is placeholder logic for now
+    return {
+      totalPositions: 0,
+      totalValueUSD: 0,
+      totalLPTokens: 0,
+      averageSharePercentage: 0
+    };
   }
 
   async getRecommendedPools(userAccount) {
-    try {
-      const currentPositions = await this.getUserLPPositions(userAccount);
-      const currentPoolAccounts = new Set(currentPositions.map(p => p.ammAccount));
-      
-      return {
-        recommended: [],
-        message: "Recommendation engine coming soon"
-      };
-    } catch (error) {
-      console.error('Error getting recommended pools:', error);
-      return {
-        recommended: [],
-        message: "Error fetching recommendations"
-      };
-    }
+    // This is placeholder logic for now
+    return {
+      recommended: [],
+      message: "Recommendation engine coming soon"
+    };
   }
-
-  // Replace the old getPositionHistory function in lib/lp-tracking.js with this one
 
   async getPositionHistory(userAccount, ammAccount) {
     try {
@@ -117,7 +82,7 @@ class LPTracker {
         account: userAccount,
         ledger_index_min: -1,
         ledger_index_max: -1,
-        limit: 200 // Look at more recent transactions
+        limit: 200
       });
       
       const transactions = response.result.transactions || [];
@@ -131,7 +96,6 @@ class LPTracker {
             return null;
           }
 
-          // Check if this transaction affected the AMM we care about
           const affectedNodes = tx.meta.AffectedNodes || [];
           const isRelevant = affectedNodes.some(node => {
             const ammNode = node.ModifiedNode || node.CreatedNode || node.DeletedNode;
@@ -142,7 +106,6 @@ class LPTracker {
             return null;
           }
 
-          // Return structured data for relevant transactions
           return {
             hash: tx.tx.hash,
             type: tx.tx.TransactionType,
@@ -151,7 +114,7 @@ class LPTracker {
             lpTokens: tx.meta.delivered_amount || tx.tx.LPTokenOut || tx.tx.LPTokenIn || null
           };
         })
-        .filter(item => item !== null); // Filter out irrelevant transactions
+        .filter(item => item !== null);
       
       return history;
 
@@ -162,79 +125,21 @@ class LPTracker {
   }
 
   async calculateFeesEarned(userAccount, ammAccount) {
-    try {
-      const positions = await this.getUserLPPositions(userAccount);
-      const currentPosition = positions.find(p => p.ammAccount === ammAccount);
-      
-      if (!currentPosition) {
-        return {
-          totalFeesUSD: 0,
-          estimatedAPY: 0,
-          message: "No active position found"
-        };
-      }
-      
-      return {
-        totalFeesUSD: 0,
-        estimatedAPY: 0,
-        message: "Fee calculation coming soon",
-        sharePercentage: currentPosition.sharePercentage
-      };
-    } catch (error) {
-      console.error('Error calculating fees earned:', error);
-      return {
-        totalFeesUSD: 0,
-        estimatedAPY: 0,
-        message: "Error calculating fees"
-      };
-    }
+    // This is placeholder logic for now
+    return {
+      totalFeesUSD: 0,
+      estimatedAPY: 0,
+      message: "Fee calculation coming soon"
+    };
   }
 
   async calculatePnL(userAccount, ammAccount, depositTx) {
-    try {
-      const positions = await this.getUserLPPositions(userAccount);
-      const currentPosition = positions.find(p => p.ammAccount === ammAccount);
-      
-      if (!currentPosition) {
-        return {
-          unrealizedPnL: 0,
-          unrealizedPnLPercent: 0,
-          message: "No active position found"
-        };
-      }
-      
-      let initialDeposit = null;
-      if (depositTx) {
-        try {
-          const client = await ensureConnected();
-          const txResponse = await client.request({
-            command: 'tx',
-            transaction: depositTx
-          });
-          initialDeposit = txResponse.result;
-        } catch (txError) {
-          console.error('Error fetching deposit transaction:', txError);
-        }
-      }
-      
-      return {
-        unrealizedPnL: 0,
-        unrealizedPnLPercent: 0,
-        currentValue: {
-          asset1: currentPosition.asset1.userAmount,
-          asset2: currentPosition.asset2.userAmount
-        },
-        message: "Full PnL calculation coming soon",
-        hasDepositData: !!initialDeposit
-      };
-    } catch (error) {
-      console.error('Error calculating PnL:', error);
-      return {
-        unrealizedPnL: 0,
-        unrealizedPnLPercent: 0,
-        message: "Error calculating PnL"
-      };
-    }
+    // This is placeholder logic for now
+    return {
+      unrealizedPnL: 0,
+      unrealizedPnLPercent: 0,
+      message: "Full PnL calculation coming soon"
+    };
   }
 
   parseAmount(amount) {
