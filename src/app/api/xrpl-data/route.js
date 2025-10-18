@@ -13,7 +13,7 @@ export async function GET(request) {
   const searchQuery = searchParams.get('search');
   const tokenomicsToken = searchParams.get('tokenomics');
 
-  const cacheKey = `xrpl-aggregator-v5-final:${searchQuery || ''}:${tokenomicsToken || ''}`;
+  const cacheKey = `xrpl-aggregator-v8-final:${searchQuery || ''}:${tokenomicsToken || ''}`;
 
   try {
     const cachedData = await redis.get(cacheKey);
@@ -23,6 +23,7 @@ export async function GET(request) {
 
     const testAccount = 'rsLFad8YFVeyycCSDZFhQjDkXynHM5Ct7o';
 
+    // We only need to fetch the main aggregator data, not call a separate search function
     const [
       processedNftData,
       onthedexAggregatorData,
@@ -33,20 +34,22 @@ export async function GET(request) {
       fetchXrpscanTokenomics(tokenomicsToken)
     ]);
 
-    // THIS IS THE FIX: Perform search filtering on the backend.
+    // --- THIS IS THE NEW, SMARTER FILTERING LOGIC ---
     let searchResults = null;
     if (searchQuery && onthedexAggregatorData?.tokens) {
-      const searchTerm = searchQuery.toLowerCase();
-      searchResults = onthedexAggregatorData.tokens.filter(token => 
-        token.name?.toLowerCase().includes(searchTerm) || 
-        token.currency?.toLowerCase().includes(searchTerm)
-      ).slice(0, 50); // Limit to 50 results
+      const term = searchQuery.toLowerCase();
+      searchResults = onthedexAggregatorData.tokens.filter(token => {
+        // Check the currency, the top-level name, and any names inside the "pairs" array
+        const currencyMatch = token.currency?.toLowerCase().includes(term);
+        const nameMatch = token.name?.toLowerCase().includes(term);
+        const pairNameMatch = token.dex?.pairs?.some(pair => pair.name?.toLowerCase().includes(term));
+        return currencyMatch || nameMatch || pairNameMatch;
+      }).slice(0, 50); // Limit to 50 results
     }
 
     const liveData = {
       timestamp: new Date().toISOString(),
       nfts: processedNftData,
-      // All market data is now from the reliable aggregator endpoint
       market_data: onthedexAggregatorData, 
       search_results: searchResults,
       tokenomics: tokenomicsData
