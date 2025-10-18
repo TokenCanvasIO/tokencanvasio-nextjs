@@ -65,9 +65,21 @@ export async function GET(request) {
         
         try {
           const enrichedToken = await enrichTokenWithCoinGecko(token);
-          enrichedResults.push(enrichedToken);
+  
+          // ✅ CRITICAL FIX: Force isXrpl and other properties AFTER spreading
+          enrichedResults.push({
+            ...enrichedToken,
+            isXrpl: true,
+            id: enrichedToken.id || `${token.currency}-${token.issuer}`,
+            image: enrichedToken.large || enrichedToken.image || null,
+            large: enrichedToken.large || null,
+            thumb: enrichedToken.thumb || null
+          });
+
+          console.log(`[XRPL Data] ✓ Token "${token.currency}" enriched with isXrpl: true`);
+
         } catch (error) {
-          console.error(`Failed to enrich token ${token.currency}:`, error);
+          console.error(`Failed to enrich token ${token.currency}:`, error); 
           // Add token without enrichment on failure
           enrichedResults.push({
             ...token,

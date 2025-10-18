@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clear:cache": "node scripts/clearcache.js"
   },
   "dependencies": {
     "apexcharts": "^5.3.5",
