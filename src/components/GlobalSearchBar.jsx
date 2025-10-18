@@ -3,10 +3,12 @@ import { useUIStore } from '../store/useUIStore.js';
 import { useSearchStore } from '../store/useSearchStore.js';
 import { shallow } from 'zustand/shallow';
 
-function GlobalSearchBar() {
-  // This is our test to prove the file has updated.
-  console.log('--- RUNNING LATEST GlobalSearchBar.jsx ---');
+// --- THE FIX ---
+// The path is now corrected to go up one level ('../')
+// and the filename is assumed to be the matching one.
+import '../styles/GlobalSearchBar.css';
 
+function GlobalSearchBar() {
   const { searchTerm, setSearchTerm } = useSearchStore(
     (state) => ({
       searchTerm: state.searchTerm,
