@@ -1,6 +1,5 @@
 // lib/lp-tracking.js
-import { lpTracker } from '@/lib/lp-tracking';
-import { ammCache } from '@/lib/amm-cache';
+import { ensureConnected } from '@/lib/xrpl-helpers';
 
 class LPTracker {
   async getUserLPPositions(userAccount) {
@@ -91,14 +90,7 @@ class LPTracker {
 
   async getRecommendedPools(userAccount) {
     try {
-      const client = await ensureConnected();
-      
-      // Get user's current positions to avoid recommending same pools
-      const currentPositions = await this.getUserLPPositions(userAccount);
-      const currentPoolAccounts = new Set(currentPositions.map(p => p.ammAccount));
-      
-      // For now, return a simple structure
-      // In production, you'd fetch popular pools and filter out user's current ones
+      // This is placeholder logic as noted in your code
       return {
         recommended: [],
         message: "Recommendation engine coming soon"
@@ -114,129 +106,71 @@ class LPTracker {
 
   async getPositionHistory(userAccount, ammAccount) {
     try {
-      const client = await ensureConnected();
-      
-      // Get account transactions related to AMM
-      const response = await client.request({
-        command: 'account_tx',
-        account: userAccount,
-        ledger_index_min: -1,
-        ledger_index_max: -1,
-        limit: 100
-      });
-      
-      const transactions = response.result.transactions || [];
-      
-      // Filter for AMM-related transactions (AMMDeposit, AMMWithdraw)
-      const ammTxs = transactions.filter(tx => {
-        const txType = tx.tx?.TransactionType;
-        const isAMMTx = txType === 'AMMDeposit' || txType === 'AMMWithdraw';
-        const isTargetPool = tx.tx?.Asset && tx.tx?.Asset2; // AMM transactions have these
-        return isAMMTx && isTargetPool;
-      });
-      
-      return ammTxs.map(tx => ({
-        hash: tx.tx.hash,
-        type: tx.tx.TransactionType,
-        date: tx.tx.date ? new Date((tx.tx.date + 946684800) * 1000).toISOString() : null,
-        ledgerIndex: tx.tx.ledger_index,
-        lpTokens: tx.meta?.delivered_amount || null
-      }));
+        const client = await ensureConnected();
+        
+        const response = await client.request({
+            command: 'account_tx',
+            account: userAccount,
+            ledger_index_min: -1,
+            ledger_index_max: -1,
+            limit: 200
+        });
+        
+        const transactions = response.result.transactions || [];
+        
+        const history = transactions
+            .map(tx => {
+                if (!tx.meta || !tx.tx) return null;
+
+                const txType = tx.tx.TransactionType;
+                if (txType !== 'AMMDeposit' && txType !== 'AMMWithdraw' && txType !== 'AMMBid') {
+                    return null;
+                }
+
+                const affectedNodes = tx.meta.AffectedNodes || [];
+                const isRelevant = affectedNodes.some(node => {
+                    const ammNode = node.ModifiedNode || node.CreatedNode || node.DeletedNode;
+                    return ammNode?.LedgerEntryType === 'AMM' && ammNode?.FinalFields?.Account === ammAccount;
+                });
+
+                if (!isRelevant) {
+                    return null;
+                }
+
+                return {
+                    hash: tx.tx.hash,
+                    type: tx.tx.TransactionType,
+                    date: tx.tx.date ? new Date((tx.tx.date + 946684800) * 1000).toISOString() : null,
+                    ledgerIndex: tx.tx.ledger_index,
+                    lpTokens: tx.meta.delivered_amount || tx.tx.LPTokenOut || tx.tx.LPTokenIn || null
+                };
+            })
+            .filter(item => item !== null);
+        
+        return history;
+
     } catch (error) {
-      console.error('Error getting position history:', error);
-      return [];
+        console.error('Error getting position history:', error);
+        return [];
     }
   }
 
   async calculateFeesEarned(userAccount, ammAccount) {
-    try {
-      const client = await ensureConnected();
-      
-      // Get current position
-      const positions = await this.getUserLPPositions(userAccount);
-      const currentPosition = positions.find(p => p.ammAccount === ammAccount);
-      
-      if (!currentPosition) {
-        return {
-          totalFeesUSD: 0,
-          estimatedAPY: 0,
-          message: "No active position found"
-        };
-      }
-      
-      // This would require tracking deposit amounts and comparing to current value
-      // For now, return placeholder
-      return {
-        totalFeesUSD: 0,
-        estimatedAPY: 0,
-        message: "Fee calculation coming soon",
-        sharePercentage: currentPosition.sharePercentage
-      };
-    } catch (error) {
-      console.error('Error calculating fees earned:', error);
-      return {
-        totalFeesUSD: 0,
-        estimatedAPY: 0,
-        message: "Error calculating fees"
-      };
-    }
+    // This is placeholder logic as noted in your code
+    return {
+      totalFeesUSD: 0,
+      estimatedAPY: 0,
+      message: "Fee calculation coming soon"
+    };
   }
 
   async calculatePnL(userAccount, ammAccount, depositTx) {
-    try {
-      const client = await ensureConnected();
-      
-      // Get current position
-      const positions = await this.getUserLPPositions(userAccount);
-      const currentPosition = positions.find(p => p.ammAccount === ammAccount);
-      
-      if (!currentPosition) {
-        return {
-          unrealizedPnL: 0,
-          unrealizedPnLPercent: 0,
-          message: "No active position found"
-        };
-      }
-      
-      // If depositTx provided, fetch that transaction to get initial deposit amounts
-      let initialDeposit = null;
-      if (depositTx) {
-        try {
-          const txResponse = await client.request({
-            command: 'tx',
-            transaction: depositTx
-          });
-          initialDeposit = txResponse.result;
-        } catch (txError) {
-          console.error('Error fetching deposit transaction:', txError);
-        }
-      }
-      
-      // Calculate PnL (simplified version)
-      // Real calculation would need:
-      // 1. Initial deposit amounts (asset1 and asset2)
-      // 2. Current position value
-      // 3. Impermanent loss calculation
-      // 4. Fees earned
-      
-      return {
-        unrealizedPnL: 0,
-        unrealizedPnLPercent: 0,
-        currentValue: {
-          asset1: currentPosition.asset1.userAmount,
-          asset2: currentPosition.asset2.userAmount
-        },
-        message: "Full PnL calculation coming soon",
-        hasDepositData: !!initialDeposit
-      };
-    } catch (error) {
-      console.error('Error calculating PnL:', error);
-      return {
-        unrealizedPnL: 0,
-        unrealizedPnLPercent: 0,
-        message: "Error calculating PnL"
-      };
-    }
+    // This is placeholder logic as noted in your code
+    return {
+      unrealizedPnL: 0,
+      unrealizedPnLPercent: 0,
+      message: "Full PnL calculation coming soon"
+    };
   }
 
   parseAmount(amount) {
