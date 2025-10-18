@@ -27,35 +27,80 @@ export function formatAmount(amount) {
   };
 }
 
+// Helper: Create fallback metadata
+function createFallbackMetadata(currency) {
+  const currencySymbol = currency.length > 3 ? currency.substring(0, 3) : currency;
+  return {
+    name: currency,
+    symbol: currency,
+    image: `https://avatar.vercel.sh/${currency}.png?size=128&text=${currencySymbol}`,
+    current_price: 0
+  };
+}
+
 // Helper: Get token metadata from CoinGecko
 export async function getTokenMetadata(currency, issuer) {
   try {
-    if (currency === 'XRP') {
+    if (currency === 'XRP' && !issuer) {
       return {
         name: 'XRP',
         symbol: 'XRP',
         image: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
-        current_price: null
+        current_price: 0
       };
     }
-    const searchResponse = await fetch(`https://api.coingecko.com/api/v3/search?query=${currency}`);
-    const searchData = await searchResponse.json();
-    const match = searchData.coins?.find(coin => coin.symbol.toLowerCase() === currency.toLowerCase());
 
-    if (match) {
-      const detailsResponse = await fetch(`https://api.coingecko.com/api/v3/coins/${match.id}`);
-      const details = await detailsResponse.json();
+    const apiKey = process.env.COINGECKO_API_KEY;
+    const usePro = !!apiKey;
+    
+    // --- CORRECTED SECTION ---
+    // Use the correct base URL and API key parameter for the Pro plan
+    const baseUrl = usePro ? 'https://pro-api.coingecko.com/api/v3' : 'https://api.coingecko.com/api/v3';
+    const apiKeyParam = usePro ? `&x_cg_pro_api_key=${apiKey}` : '';
+
+    const searchUrl = `${baseUrl}/search?query=${encodeURIComponent(currency)}${apiKeyParam}`;
+    const searchResponse = await fetch(searchUrl);
+    // --- END CORRECTED SECTION ---
+
+    if (!searchResponse.ok) {
+      console.warn(`CoinGecko search failed for ${currency}: ${searchResponse.status}`);
+      return createFallbackMetadata(currency);
+    }
+
+    const searchData = await searchResponse.json();
+    const coin = searchData.coins?.find(c => c.symbol?.toLowerCase() === currency.toLowerCase()) || searchData.coins?.[0];
+
+    if (!coin?.id) {
+      return createFallbackMetadata(currency);
+    }
+    
+    // --- CORRECTED SECTION ---
+    // Use the correct URL parameter format for the details endpoint
+    const detailUrl = `${baseUrl}/coins/${coin.id}?${apiKeyParam.substring(1)}`;
+    const detailResponse = await fetch(detailUrl);
+    // --- END CORRECTED SECTION ---
+
+    if (!detailResponse.ok) {
       return {
-        name: details.name,
-        symbol: details.symbol.toUpperCase(),
-        image: details.image?.large || details.image?.small,
-        current_price: details.market_data?.current_price?.usd
+        name: coin.name || currency,
+        symbol: coin.symbol?.toUpperCase() || currency,
+        image: coin.large || coin.thumb || createFallbackMetadata(currency).image,
+        current_price: 0
       };
     }
-    return { name: currency, symbol: currency, image: null, current_price: null };
+
+    const detailData = await detailResponse.json();
+
+    return {
+      name: detailData.name || currency,
+      symbol: detailData.symbol?.toUpperCase() || currency,
+      image: detailData.image?.large || detailData.image?.small || createFallbackMetadata(currency).image,
+      current_price: detailData.market_data?.current_price?.usd || 0
+    };
+
   } catch (error) {
-    console.error('Error fetching token metadata:', error);
-    return { name: currency, symbol: currency, image: null, current_price: null };
+    console.error(`Error fetching metadata for ${currency}:`, error.message);
+    return createFallbackMetadata(currency);
   }
 }
 
@@ -68,8 +113,8 @@ export function calculatePoolMetrics(ammInfo, asset1Metadata, asset2Metadata) {
   const asset1Value = asset1Amount * asset1Price;
   const asset2Value = asset2Amount * asset2Price;
   const totalLiquidity = asset1Value + asset2Value;
-  const tradingFee = ammInfo.trading_fee ? ammInfo.trading_fee / 100000 : 0.003; // Corrected division
-  
+  const tradingFee = ammInfo.trading_fee ? ammInfo.trading_fee / 100000 : 0.003;
+
   return {
     totalLiquidity,
     tradingFee: tradingFee * 100,
