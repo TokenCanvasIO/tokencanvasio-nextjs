@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-// FIX: Update this path to match where your redis.js file actually is
-// Check your existing /api/xrpl-data/route.js to see the correct path
 import redis from '../redis';
 import {
   fetchOnthedexAggregator,
@@ -74,10 +72,16 @@ export async function GET(request) {
       
       try {
         const enrichedToken = await enrichTokenWithCoinGecko(token);
-        enrichedResults.push(enrichedToken);
+        // --- THIS IS THE FIX ---
+        // We explicitly add isXrpl: true to the successfully enriched token
+        enrichedResults.push({
+            ...enrichedToken,
+            isXrpl: true,
+            id: enrichedToken.id || `${token.currency}-${token.issuer}` // Ensure ID exists
+        });
       } catch (error) {
         console.error(`Failed to enrich token ${token.currency}:`, error);
-        // Add token without enrichment on failure
+        // The catch block already correctly adds isXrpl: true on failure
         enrichedResults.push({
           ...token,
           id: `${token.currency}-${token.issuer}`,
