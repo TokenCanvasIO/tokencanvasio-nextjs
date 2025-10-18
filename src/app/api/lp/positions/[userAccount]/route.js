@@ -1,5 +1,6 @@
 // lib/lp-tracking.js
-import { ensureConnected } from './xrpl-helpers';
+import { lpTracker } from '@/lib/lp-tracking';
+import { ammCache } from '@/lib/amm-cache';
 
 class LPTracker {
   async getUserLPPositions(userAccount) {
