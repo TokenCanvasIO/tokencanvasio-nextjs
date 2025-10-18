@@ -22,11 +22,9 @@ export async function GET(request) {
     );
   }
 
-  // Create cache key
   const cacheKey = `xrpl-enriched:${searchQuery.toLowerCase()}`;
 
   try {
-    // Check cache first
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
       console.log(`[XRPL Enriched] Cache hit for "${searchQuery}"`);
@@ -40,7 +38,39 @@ export async function GET(request) {
     // 1. Fetch the complete list of all tokens
     const onthedexAggregatorData = await fetchOnthedexAggregator();
 
+    // 🔍 ADD THIS DEBUG BLOCK
+    console.log('========================================');
+    console.log('🔍 ONTHEDEX AGGREGATOR DEBUG');
+    console.log('========================================');
+    console.log('Total tokens from OnTheDex:', onthedexAggregatorData?.tokens?.length || 0);
+
+    if (onthedexAggregatorData?.tokens) {
+      // Check if specific tokens exist
+      const soloToken = onthedexAggregatorData.tokens.find(t =>
+        t.currency?.toLowerCase() === 'solo' || t.name?.toLowerCase().includes('sologenic')
+      );
+      const coreToken = onthedexAggregatorData.tokens.find(t =>
+        t.currency?.toLowerCase() === 'core' || t.name?.toLowerCase().includes('coreum')
+      );
+      const dropToken = onthedexAggregatorData.tokens.find(t =>
+        t.currency?.toLowerCase() === 'drop'
+      );
+
+      console.log('SOLO found:', !!soloToken, soloToken ? `(${soloToken.name})` : '');
+      console.log('CORE found:', !!coreToken, coreToken ? `(${coreToken.name})` : '');
+      console.log('DROP found:', !!dropToken, dropToken ? `(${dropToken.name})` : '');
+
+      // Show a sample of what tokens ARE available
+      console.log('Sample of available currencies:');
+      onthedexAggregatorData.tokens.slice(0, 10).forEach(t => {
+        console.log(`  - ${t.currency} (${t.name || 'N/A'})`);
+      });
+    }
+    console.log('========================================');
+    // 🔍 END DEBUG BLOCK
+
     if (!onthedexAggregatorData?.tokens) {
+      console.error('❌ OnTheDex returned no tokens!');
       return NextResponse.json([], {
         headers: { 'X-Source': 'Live-Fetch-Empty' }
       });
@@ -57,36 +87,33 @@ export async function GET(request) {
       return currencyMatch || nameMatch || pairNameMatch;
     }).slice(0, 20); // Limit to 20 results
 
-    console.log(`[XRPL Enriched] Found ${searchResults.length} matching tokens`);
+    console.log(`🔍 Search for "${searchQuery}": Found ${searchResults.length} matches`);
+    searchResults.forEach(t => {
+      console.log(`  - ${t.currency} (${t.name || 'N/A'})`);
+    });
 
     // 3. Sequentially enrich each result with CoinGecko data
     const enrichedResults = [];
     for (let i = 0; i < searchResults.length; i++) {
       const token = searchResults[i];
 
-      // Wait 1.2 seconds between requests (except for the first one)
       if (i > 0) {
         await sleep(1200);
       }
 
       try {
         const enrichedToken = await enrichTokenWithCoinGecko(token);
-        
-        // ✅ CRITICAL FIX: isXrpl MUST come AFTER the spread to prevent overwriting
         enrichedResults.push({
           ...enrichedToken,
-          isXrpl: true,  // ← This MUST be after the spread
+          isXrpl: true,
           id: enrichedToken.id || `${token.currency}-${token.issuer}`,
           image: enrichedToken.large || enrichedToken.image || null,
           large: enrichedToken.large || null,
           thumb: enrichedToken.thumb || null
         });
-        
         console.log(`[XRPL Enriched] ✓ Token "${token.currency}" enriched with isXrpl: true`);
       } catch (error) {
         console.error(`[XRPL Enriched] Failed to enrich token ${token.currency}:`, error);
-        
-        // On error, still add the token with isXrpl flag
         enrichedResults.push({
           ...token,
           isXrpl: true,
@@ -101,7 +128,6 @@ export async function GET(request) {
 
     console.log(`[XRPL Enriched] Successfully enriched ${enrichedResults.length} tokens`);
     
-    // Debug: Log first result to verify isXrpl flag
     if (enrichedResults.length > 0) {
       console.log(`[XRPL Enriched] First result check:`, {
         name: enrichedResults[0].name,
@@ -118,6 +144,7 @@ export async function GET(request) {
     return NextResponse.json(enrichedResults, {
       headers: { 'X-Source': 'Live-Fetch' }
     });
+
   } catch (error) {
     console.error('[XRPL Enriched] Error:', error);
     return NextResponse.json(
