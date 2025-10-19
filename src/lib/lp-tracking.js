@@ -73,39 +73,58 @@ class LPTracker {
     };
   }
 
+  // Replace the getPositionHistory function in lib/lp-tracking.js
+
   async getPositionHistory(userAccount, ammAccount) {
     try {
       const client = await ensureConnected();
-      
-      const response = await client.request({
-        command: 'account_tx',
-        account: userAccount,
-        ledger_index_min: -1,
-        ledger_index_max: -1,
-        limit: 200
-      });
-      
-      const transactions = response.result.transactions || [];
-      
-      const history = transactions
+      let allTransactions = [];
+      let marker = undefined;
+      const searchPages = 5; // How many pages of history to search (5 pages * 200 txs/page = 1000 txs)
+      let pagesSearched = 0;
+
+      console.log(`Performing deep history search for ${userAccount}...`);
+
+      // Loop through pages of transaction history
+      while (pagesSearched < searchPages) {
+        const response = await client.request({
+          command: 'account_tx',
+          account: userAccount,
+          ledger_index_min: -1,
+          ledger_index_max: -1,
+          limit: 200,
+          marker: marker,
+        });
+
+        if (response.result.transactions) {
+          allTransactions.push(...response.result.transactions);
+        }
+
+        if (response.result.marker) {
+          marker = response.result.marker;
+          pagesSearched++;
+        } else {
+          break; // No more pages in the account's history
+        }
+      }
+
+      console.log(`Searched through ${allTransactions.length} total transactions.`);
+
+      // The filtering logic from before remains the same
+      const history = allTransactions
         .map(tx => {
           if (!tx.meta || !tx.tx) return null;
-
           const txType = tx.tx.TransactionType;
           if (txType !== 'AMMDeposit' && txType !== 'AMMWithdraw' && txType !== 'AMMBid') {
             return null;
           }
-
-          const affectedNodes = tx.meta.AffectedNodes || [];
-          const isRelevant = affectedNodes.some(node => {
+          const isRelevant = tx.meta.AffectedNodes?.some(node => {
             const ammNode = node.ModifiedNode || node.CreatedNode || node.DeletedNode;
             return ammNode?.LedgerEntryType === 'AMM' && ammNode?.FinalFields?.Account === ammAccount;
           });
-
           if (!isRelevant) {
             return null;
           }
-
           return {
             hash: tx.tx.hash,
             type: tx.tx.TransactionType,
@@ -116,6 +135,7 @@ class LPTracker {
         })
         .filter(item => item !== null);
       
+      console.log(`Found ${history.length} relevant AMM transactions.`);
       return history;
 
     } catch (error) {
@@ -150,4 +170,4 @@ class LPTracker {
   }
 }
 
-export const lpTracker = new LPTracker();
+export const lpTracker = new LPTracker(); 

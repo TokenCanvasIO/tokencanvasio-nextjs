@@ -1,12 +1,8 @@
 import Redis from 'ioredis';
 
-// This creates a new Redis client instance. It will automatically find the
-// connection details in your .env.local file.
-const redis = new Redis({
-  host: process.env.REDIS_HOST,
-  port: process.env.REDIS_PORT,
-  password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: 1 
-});
+// This is the final version that works everywhere.
+// It tries to use the Upstash URL first (for Netlify).
+// If it can't find it, it falls back to the default local Redis URL.
+const redis = new Redis(process.env.UPSTASH_REDIS_REST_URL || 'redis://127.0.0.1:6379');
 
 export default redis;
