@@ -1,22 +1,21 @@
-# Netlify Configuration for the Next.js Backend
 [build]
   command = "npm run build"
-  publish = ".next"
+  publish = "out"  # Changed from .next to out
 
-# Next.js plugin
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+# Remove the Next.js plugin since we're exporting static
+# [[plugins]]
+#   package = "@netlify/plugin-nextjs"
 
-# CORS headers for API routes - ALLOW ALL ORIGINS
+# Keep API routes as serverless functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# CORS headers for API routes
 [[headers]]
   for = "/api/*"
   [headers.values]
     Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type, Authorization, X-Requested-With"
-
-# Cache static assets
-[[headers]]
-  for = "/_next/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
