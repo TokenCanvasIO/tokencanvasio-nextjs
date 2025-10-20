@@ -4,18 +4,29 @@ import { getTokenMetadata } from '@/lib/xrpl-helpers';
 import { ammCache } from '@/lib/amm-cache';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 26; // Netlify Pro max
 
-export async function GET() {
+// Global flag to prevent multiple enrichments
+let isEnriching = false;
+
+export async function GET(request) {
   try {
-    // Check cache first
-    const cachedPools = ammCache.getPoolsList();
-    if (cachedPools) {
-      console.log(`✅ Returning ${cachedPools.length} pools from cache.`);
-      return NextResponse.json({ 
-        pools: cachedPools, 
-        count: cachedPools.length,
-        cached: true 
-      });
+    const { searchParams } = new URL(request.url);
+    const forceRefresh = searchParams.get('refresh') === 'true';
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cachedPools = ammCache.getPoolsList();
+      if (cachedPools) {
+        console.log(`✅ Returning ${cachedPools.length} pools from cache.`);
+        return NextResponse.json({ 
+          pools: cachedPools, 
+          count: cachedPools.length,
+          cached: true,
+          enriched: true,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
 
     // Fetch from Bithomp API
@@ -31,32 +42,124 @@ export async function GET() {
     }
     
     const bithompData = await response.json();
-    
-    // Debug: Log the structure to see what we're getting
-    console.log('Bithomp response structure:', Object.keys(bithompData));
-    
-    // Extract the pools array from the response
-    // Bithomp returns: { amms: [...], count: X } or similar
     const poolsArray = bithompData.amms || bithompData.pools || bithompData.data || [];
     
     if (!Array.isArray(poolsArray)) {
-      console.error('Unexpected Bithomp response format:', bithompData);
       throw new Error('Bithomp API did not return an array of pools');
     }
     
     console.log(`🎯 Fetched ${poolsArray.length} pools from Bithomp`);
+
+    // Create basic pools immediately (for fast response)
+    const basicPools = poolsArray.map(pool => createBasicPool(pool));
     
-    // Enrich with metadata
-    console.log(`💎 Enriching ${poolsArray.length} pools with metadata...`);
-    const enrichedPools = await Promise.all(
-      poolsArray.map(async (pool) => {
+    // Cache basic data immediately
+    ammCache.setPoolsList(basicPools);
+    
+    // Start enrichment in background if not already running
+    if (!isEnriching) {
+      isEnriching = true;
+      enrichPoolsInBackground(poolsArray).finally(() => {
+        isEnriching = false;
+      });
+    }
+
+    return NextResponse.json({ 
+      pools: basicPools, 
+      count: basicPools.length,
+      source: 'bithomp-api',
+      timestamp: new Date().toISOString(),
+      cached: false,
+      enriched: false,
+      message: 'Enrichment in progress. Refresh in 2-3 minutes for full metadata.'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching all AMM pools:', error);
+    return NextResponse.json({
+      error: 'Failed to fetch AMM pools',
+      details: error.message
+    }, { status: 500 });
+  }
+}
+
+// Helper: Create basic pool without enrichment
+function createBasicPool(pool) {
+  const asset1 = pool.asset || pool.amount || {};
+  const asset2 = pool.asset2 || pool.amount2 || {};
+  
+  const asset1Currency = asset1.currency || 'XRP';
+  const asset1Issuer = asset1.issuer || null;
+  const asset2Currency = asset2.currency || 'XRP';
+  const asset2Issuer = asset2.issuer || null;
+  
+  const getBasicMeta = (currency, issuer) => {
+    if (currency === 'XRP' && !issuer) {
+      return {
+        name: 'XRP',
+        symbol: 'XRP',
+        image: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
+        price: 0
+      };
+    }
+    const symbol = currency.length > 3 ? currency.substring(0, 3) : currency;
+    return {
+      name: currency,
+      symbol: currency,
+      image: `https://avatar.vercel.sh/${currency}.png?size=128&text=${symbol}`,
+      price: 0
+    };
+  };
+  
+  const asset1Meta = getBasicMeta(asset1Currency, asset1Issuer);
+  const asset2Meta = getBasicMeta(asset2Currency, asset2Issuer);
+  
+  return {
+    account: pool.account,
+    id: `amm-${pool.account}`,
+    name: `${asset1Meta.symbol?.toUpperCase()}/${asset2Meta.symbol?.toUpperCase()}`,
+    asset1: {
+      currency: asset1Currency,
+      issuer: asset1Issuer,
+      name: asset1Meta.name,
+      symbol: asset1Meta.symbol,
+      image: asset1Meta.image,
+      price: 0
+    },
+    asset2: {
+      currency: asset2Currency,
+      issuer: asset2Issuer,
+      name: asset2Meta.name,
+      symbol: asset2Meta.symbol,
+      image: asset2Meta.image,
+      price: 0
+    },
+    images: [asset1Meta.image, asset2Meta.image],
+    liquidity: pool.liquidity || 0,
+    total_volume: pool.volume || 0,
+    tradingFee: pool.tradingFee || pool.trading_fee || 0,
+    apy: pool.apy || 0,
+    isAmm: true,
+    source: 'bithomp-api'
+  };
+}
+
+// Background enrichment function (runs async, doesn't block response)
+async function enrichPoolsInBackground(poolsArray) {
+  console.log('🔄 Starting background enrichment...');
+  const startTime = Date.now();
+  
+  try {
+    const enrichedPools = await Promise.allSettled(
+      poolsArray.map(async (pool, index) => {
         try {
-          // Parse asset info from Bithomp response
-          // Bithomp format may have: asset/asset2 or amount/amount2
+          if (index % 20 === 0) {
+            console.log(`📊 Background progress: ${index}/${poolsArray.length}`);
+          }
+          
           const asset1 = pool.asset || pool.amount || {};
           const asset2 = pool.asset2 || pool.amount2 || {};
           
-          // Handle XRP (no issuer)
           const asset1Currency = asset1.currency || 'XRP';
           const asset1Issuer = asset1.issuer || null;
           const asset2Currency = asset2.currency || 'XRP';
@@ -70,27 +173,24 @@ export async function GET() {
           return {
             account: pool.account,
             id: `amm-${pool.account}`,
-            name: `${asset1Meta.symbol?.toUpperCase() || asset1Currency}/${asset2Meta.symbol?.toUpperCase() || asset2Currency}`,
+            name: `${asset1Meta.symbol?.toUpperCase()}/${asset2Meta.symbol?.toUpperCase()}`,
             asset1: {
               currency: asset1Currency,
               issuer: asset1Issuer,
-              name: asset1Meta.name || asset1Currency,
-              symbol: asset1Meta.symbol || asset1Currency,
-              image: asset1Meta.image || `https://avatar.vercel.sh/${asset1Currency}.png?size=128&text=${asset1Currency.substring(0, 3)}`,
+              name: asset1Meta.name,
+              symbol: asset1Meta.symbol,
+              image: asset1Meta.image,
               price: asset1Meta.current_price || 0
             },
             asset2: {
               currency: asset2Currency,
               issuer: asset2Issuer,
-              name: asset2Meta.name || asset2Currency,
-              symbol: asset2Meta.symbol || asset2Currency,
-              image: asset2Meta.image || `https://avatar.vercel.sh/${asset2Currency}.png?size=128&text=${asset2Currency.substring(0, 3)}`,
+              name: asset2Meta.name,
+              symbol: asset2Meta.symbol,
+              image: asset2Meta.image,
               price: asset2Meta.current_price || 0
             },
-            images: [
-              asset1Meta.image || `https://avatar.vercel.sh/${asset1Currency}.png?size=128&text=${asset1Currency.substring(0, 3)}`,
-              asset2Meta.image || `https://avatar.vercel.sh/${asset2Currency}.png?size=128&text=${asset2Currency.substring(0, 3)}`
-            ],
+            images: [asset1Meta.image, asset2Meta.image],
             liquidity: pool.liquidity || 0,
             total_volume: pool.volume || 0,
             tradingFee: pool.tradingFee || pool.trading_fee || 0,
@@ -100,29 +200,22 @@ export async function GET() {
           };
         } catch (error) {
           console.error(`Error enriching pool ${pool.account}:`, error.message);
-          return null;
+          return createBasicPool(pool);
         }
       })
     );
     
-    const validPools = enrichedPools.filter(p => p !== null);
-    console.log(`✅ Successfully enriched ${validPools.length} pools`);
+    const validPools = enrichedPools
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
     
-    // Cache it
+    const enrichmentTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✅ Background enrichment complete: ${validPools.length} pools in ${enrichmentTime}s`);
+    
+    // Update cache with enriched data
     ammCache.setPoolsList(validPools);
-
-    return NextResponse.json({ 
-      pools: validPools, 
-      count: validPools.length,
-      source: 'bithomp-api',
-      timestamp: new Date().toISOString()
-    });
     
   } catch (error) {
-    console.error('❌ Error fetching all AMM pools:', error);
-    return NextResponse.json({
-      error: 'Failed to fetch AMM pools',
-      details: error.message
-    }, { status: 500 });
+    console.error('❌ Background enrichment failed:', error);
   }
 }

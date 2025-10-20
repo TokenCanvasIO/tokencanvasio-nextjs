@@ -5,8 +5,8 @@ class AMMCache {
     this.poolsList = null;
     this.poolsListTimestamp = null;
     this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-    this.POOLS_LIST_DURATION = 15 * 60 * 1000; // 15 minutes
-  }
+    this.POOLS_LIST_DURATION = 60 * 60 * 1000; // 1 hour
+  } 
   setPool(accountId, data) {
     this.pools.set(accountId, { data, timestamp: Date.now() });
   }

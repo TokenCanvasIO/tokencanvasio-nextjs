@@ -1,49 +1,37 @@
-// lib/amm-pools.js
-// Curated list of known AMM pools on XRPL
+// src/services/api-amm.js
 
-export const KNOWN_AMM_POOLS = [
-  {
-    account: 'rNZ2ZVF1ZU34kFQvcN4xkFAvdSvve5bXce',
-    name: 'XRP/MAG Pool (XPMarket)',
-    description: 'XRP to Magnetix liquidity pool',
-    source: 'xpmarket'
-  },
-];
-
-// Function to check if pools are still active
-export async function validatePools(client) {
-  const validPools = [];
-  
-  for (const pool of KNOWN_AMM_POOLS) {
-    try {
-      const response = await client.request({
-        command: 'amm_info',
-        amm_account: pool.account
-      });
-      
-      if (response.result.amm) {
-        const amm = response.result.amm;
-        
-        const asset1 = typeof amm.amount === 'string' 
-          ? { currency: 'XRP' }
-          : { currency: amm.amount.currency, issuer: amm.amount.issuer };
-        
-        const asset2 = typeof amm.amount2 === 'string'
-          ? { currency: 'XRP' }
-          : { currency: amm.amount2.currency, issuer: amm.amount2.issuer };
-        
-        validPools.push({
-          ...pool,
-          asset1,
-          asset2,
-          tradingFee: amm.trading_fee / 1000,
-          isActive: true
-        });
-      }
-    } catch (err) {
-      console.warn(`Pool ${pool.account} is no longer active:`, err.message);
+export async function getAmmPools() {
+  try {
+    const response = await fetch('/api/amm/pools/all');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
+    const data = await response.json();
+    
+    // Your Next.js API returns: { pools: [...], count: X, cached: boolean }
+    return data.pools || [];
+    
+  } catch (err) {
+    console.error('Error fetching all AMM pools:', err);
+    throw err;
   }
-  
-  return validPools;
+}
+
+// Fetch a single pool's details
+export async function getAmmPoolDetails(ammAccount) {
+  try {
+    const response = await fetch(`/api/amm/${ammAccount}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (err) {
+    console.error(`Error fetching pool details for ${ammAccount}:`, err);
+    throw err;
+  }
 }
