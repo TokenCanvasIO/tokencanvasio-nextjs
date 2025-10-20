@@ -3,16 +3,11 @@
   command = "npm run build"
   publish = ".next"
 
-# Configuration for Node.js serverless functions (for Firebase endpoints)
-[functions]
-  external_node_modules = ["firebase-admin"]
-  node_bundler = "esbuild"
-
 # Next.js plugin
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# CORS headers for API routes
+# CORS headers for API routes - ALLOW ALL ORIGINS
 [[headers]]
   for = "/api/*"
   [headers.values]
