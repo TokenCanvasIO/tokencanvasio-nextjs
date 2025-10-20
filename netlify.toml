@@ -3,13 +3,10 @@
   command = "npm run build"
   publish = ".next"
 
-# Configuration for Netlify Functions
+# Configuration for Node.js serverless functions (for Firebase endpoints)
 [functions]
-  # Mark firebase-admin as external to avoid bundling it
   external_node_modules = ["firebase-admin"]
-  # Increase function size limit
-  included_files = ["node_modules/firebase-admin/**"]
-  node_bundler = "nft"
+  node_bundler = "esbuild"
 
 # Next.js plugin
 [[plugins]]
