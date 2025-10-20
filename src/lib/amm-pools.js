@@ -2,7 +2,8 @@
 
 export async function getAmmPools() {
   try {
-    const response = await fetch('/api/amm/pools/all');
+    // UPDATED: Points to your new live server
+    const response = await fetch('https://tokencanvas.io/api/amm/pools/all');
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -10,7 +11,7 @@ export async function getAmmPools() {
     
     const data = await response.json();
     
-    // Your Next.js API returns: { pools: [...], count: X, cached: boolean }
+    // Your new API returns: { pools: [...], ... }
     return data.pools || [];
     
   } catch (err) {
@@ -19,10 +20,12 @@ export async function getAmmPools() {
   }
 }
 
-// Fetch a single pool's details
+// NOTE: This function won't work yet as we only created the /all endpoint.
+// We would need to create a new /api/amm/[accountId] endpoint on your server for this.
 export async function getAmmPoolDetails(ammAccount) {
   try {
-    const response = await fetch(`/api/amm/${ammAccount}`);
+    // UPDATED: Points to your new live server (placeholder)
+    const response = await fetch(`https://tokencanvas.io/api/amm/${ammAccount}`);
     
     if (!response.ok) {
       const errorData = await response.json();
