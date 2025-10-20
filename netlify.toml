@@ -4,6 +4,11 @@
   command = "npm run build"
   publish = ".next"
 
+# ✅ FIX: This new block tells Netlify how to handle the large firebase-admin library,
+# which will fix the "Failed to create function" error.
+[functions]
+  external_node_modules = ["firebase-admin"]
+
 # This rule tells Netlify how to correctly handle preflight (OPTIONS) requests
 # for all API paths, overriding the incorrect default behavior.
 [[headers]]
