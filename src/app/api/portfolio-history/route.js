@@ -1,7 +1,9 @@
-const fetch = require('node-fetch');
+import { NextResponse } from 'next/server';
+
+// NOTE: We don't need 'node-fetch' as Next.js provides it globally.
 
 // --- PERFORMANCE CONFIGURATION ---
-const TIMEOUT_THRESHOLD_MS = 1500;
+const TIMEOUT_THRESHOLD_MS = 1500; // Note: This is less effective in Next.js runtime
 const MAX_DATA_POINTS = 80;
 
 const findPriceAtTimestamp = (priceHistory, timestamp) => {
@@ -22,9 +24,10 @@ const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
     const coingeckoId = id === 'xrp' ? 'ripple' : id;
     const url = `https://pro-api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`;
     
-    return fetch(url, {
-      headers: { 'x-cg-pro-api-key': apiKey },
-    })
+    // CHANGED: Using the Pro API key as a query parameter for reliability
+    const urlWithKey = `${url}&x_cg_pro_api_key=${apiKey}`;
+
+    return fetch(urlWithKey)
       .then(res => {
         if (!res.ok) {
           return res.text().then(text => {
@@ -46,22 +49,20 @@ const fetchHistoricalPrices = async (assetIds, days, apiKey) => {
   return priceMap;
 };
 
-exports.handler = async (event, context) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
-  }
-
+// CHANGED: Using the Next.js App Router export for the POST method
+export async function POST(request) {
   const coingeckoApiKey = process.env.COINGECKO_API_KEY;
   if (!coingeckoApiKey) {
     console.error("FATAL: COINGECKO_API_KEY environment variable was not found or is empty.");
-    return { statusCode: 500, body: JSON.stringify({ message: 'Server configuration error: API key is missing.' }) };
+    return NextResponse.json({ message: 'Server configuration error: API key is missing.' }, { status: 500 });
   }
 
   try {
-    const { transactions, timeframe } = JSON.parse(event.body);
+    // CHANGED: Getting the body from the Next.js request object
+    const { transactions, timeframe } = await request.json();
 
     if (!Array.isArray(transactions) || transactions.length === 0) {
-      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [], cost: [] }) };
+      return NextResponse.json({ pnl: [], value: [], cost: [] }, { status: 200 });
     }
 
     const firstTransactionTimestamp = transactions.reduce((earliest, txn) => {
@@ -96,11 +97,8 @@ exports.handler = async (event, context) => {
     const step = (endDate.getTime() - startDate.getTime()) / MAX_DATA_POINTS;
 
     for (let i = 0; i <= MAX_DATA_POINTS; i++) {
-      if (context.getRemainingTimeInMillis() < TIMEOUT_THRESHOLD_MS) {
-        console.warn('Approaching timeout, returning partial data.');
-        break;
-      }
-
+      // NOTE: context.getRemainingTimeInMillis() is not available in Next.js runtime.
+      // This timeout check is removed. For long-running functions, consider Vercel's Hobby plan or higher.
       const currentTimestamp = startDate.getTime() + (i * step);
       let totalPortfolioValue = 0;
       let totalCostBasis = 0;
@@ -148,20 +146,14 @@ exports.handler = async (event, context) => {
     }
 
     if (pnlHistory.length < 2) {
-      return { statusCode: 200, body: JSON.stringify({ pnl: [], value: [], cost: [], error: "Not enough data to render chart." }) };
+      return NextResponse.json({ pnl: [], value: [], cost: [], error: "Not enough data to render chart." }, { status: 200 });
     }
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pnl: pnlHistory, value: valueHistory, cost: costHistory }),
-    };
+    // CHANGED: Using NextResponse to send the JSON response
+    return NextResponse.json({ pnl: pnlHistory, value: valueHistory, cost: costHistory }, { status: 200 });
 
   } catch (error) {
     console.error("Error in portfolio history calculation:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: `An internal server error occurred: ${error.message}` }),
-    };
+    return NextResponse.json({ message: `An internal server error occurred: ${error.message}` }, { status: 500 });
   }
-};
+}
