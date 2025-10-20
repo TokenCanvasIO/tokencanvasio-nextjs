@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Generate static HTML for all pages
-  output: 'export',
-  
   images: {
-    unoptimized: true, // Required for static export
     remotePatterns: [
       {
         protocol: 'https',
@@ -25,7 +21,6 @@ const nextConfig = {
     ],
   },
   
-  // CORS headers for API routes  
   async headers() {
     return [
       {

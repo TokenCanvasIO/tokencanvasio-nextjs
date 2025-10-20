@@ -1,18 +1,10 @@
 [build]
   command = "npm run build"
-  publish = "out"  # Changed from .next to out
+  publish = ".next"
 
-# Remove the Next.js plugin since we're exporting static
-# [[plugins]]
-#   package = "@netlify/plugin-nextjs"
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
-# Keep API routes as serverless functions
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-# CORS headers for API routes
 [[headers]]
   for = "/api/*"
   [headers.values]
