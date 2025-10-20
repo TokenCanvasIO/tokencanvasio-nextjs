@@ -22,7 +22,8 @@ export async function GET(request) {
     );
   }
 
-  const cacheKey = `xrpl-enriched:${searchQuery.toLowerCase()}`;
+  // ✅ FIX: Bumped cache version to bypass old bad cache
+  const cacheKey = `xrpl-enriched-v2:${searchQuery.toLowerCase()}`;
 
   try {
     const cachedData = await redis.get(cacheKey);
@@ -37,37 +38,6 @@ export async function GET(request) {
 
     // 1. Fetch the complete list of all tokens
     const onthedexAggregatorData = await fetchOnthedexAggregator();
-
-    // 🔍 ADD THIS DEBUG BLOCK
-    console.log('========================================');
-    console.log('🔍 ONTHEDEX AGGREGATOR DEBUG');
-    console.log('========================================');
-    console.log('Total tokens from OnTheDex:', onthedexAggregatorData?.tokens?.length || 0);
-
-    if (onthedexAggregatorData?.tokens) {
-      // Check if specific tokens exist
-      const soloToken = onthedexAggregatorData.tokens.find(t =>
-        t.currency?.toLowerCase() === 'solo' || t.name?.toLowerCase().includes('sologenic')
-      );
-      const coreToken = onthedexAggregatorData.tokens.find(t =>
-        t.currency?.toLowerCase() === 'core' || t.name?.toLowerCase().includes('coreum')
-      );
-      const dropToken = onthedexAggregatorData.tokens.find(t =>
-        t.currency?.toLowerCase() === 'drop'
-      );
-
-      console.log('SOLO found:', !!soloToken, soloToken ? `(${soloToken.name})` : '');
-      console.log('CORE found:', !!coreToken, coreToken ? `(${coreToken.name})` : '');
-      console.log('DROP found:', !!dropToken, dropToken ? `(${dropToken.name})` : '');
-
-      // Show a sample of what tokens ARE available
-      console.log('Sample of available currencies:');
-      onthedexAggregatorData.tokens.slice(0, 10).forEach(t => {
-        console.log(`  - ${t.currency} (${t.name || 'N/A'})`);
-      });
-    }
-    console.log('========================================');
-    // 🔍 END DEBUG BLOCK
 
     if (!onthedexAggregatorData?.tokens) {
       console.error('❌ OnTheDex returned no tokens!');
@@ -85,12 +55,9 @@ export async function GET(request) {
         pair.name?.toLowerCase().includes(term)
       );
       return currencyMatch || nameMatch || pairNameMatch;
-    }).slice(0, 20); // Limit to 20 results
+    }).slice(0, 20);
 
     console.log(`🔍 Search for "${searchQuery}": Found ${searchResults.length} matches`);
-    searchResults.forEach(t => {
-      console.log(`  - ${t.currency} (${t.name || 'N/A'})`);
-    });
 
     // 3. Sequentially enrich each result with CoinGecko data
     const enrichedResults = [];
@@ -111,7 +78,7 @@ export async function GET(request) {
           large: enrichedToken.large || null,
           thumb: enrichedToken.thumb || null
         });
-        console.log(`[XRPL Enriched] ✓ Token "${token.currency}" enriched with isXrpl: true`);
+        console.log(`[XRPL Enriched] ✓ Token "${token.currency}" enriched`);
       } catch (error) {
         console.error(`[XRPL Enriched] Failed to enrich token ${token.currency}:`, error);
         enrichedResults.push({
@@ -127,15 +94,6 @@ export async function GET(request) {
     }
 
     console.log(`[XRPL Enriched] Successfully enriched ${enrichedResults.length} tokens`);
-    
-    if (enrichedResults.length > 0) {
-      console.log(`[XRPL Enriched] First result check:`, {
-        name: enrichedResults[0].name,
-        isXrpl: enrichedResults[0].isXrpl,
-        hasImage: !!enrichedResults[0].image,
-        issuer: enrichedResults[0].issuer
-      });
-    }
 
     // 4. Cache the results for 5 minutes
     await redis.set(cacheKey, JSON.stringify(enrichedResults), 'EX', CACHE_DURATION_SECONDS);
