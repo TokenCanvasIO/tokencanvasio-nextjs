@@ -4,14 +4,12 @@
   command = "npm run build"
   publish = ".next"
 
-# This is the official Next.js plugin configuration for handling large dependencies.
-# It replaces the previous [functions] block.
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-  [plugins.inputs]
-    externalNodeModules = ["firebase-admin"]
+# This is the correct way to handle large dependencies for Netlify Functions.
+# It should now work because the project structure has been fixed.
+[functions]
+  external_node_modules = ["firebase-admin"]
 
-# This headers rule remains the same.
+# Your headers rule remains the same.
 [[headers]]
   for = "/api/*"
   [headers.values]
