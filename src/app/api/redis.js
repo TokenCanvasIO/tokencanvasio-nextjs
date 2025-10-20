@@ -12,6 +12,8 @@ class UpstashRedis {
       });
       if (!response.ok) return null;
       const data = await response.json();
+      
+      // ✅ FIX: Return just the result, not the whole Redis object
       return data.result;
     } catch (error) {
       console.error('Redis GET error:', error);
@@ -21,20 +23,31 @@ class UpstashRedis {
 
   async set(key, value, ...args) {
     try {
-      // Handle both: set(key, value, 'EX', seconds) and set(key, value)
-      const body = { value };
-      if (args[0] === 'EX' && args[1]) {
-        body.ex = args[1];
-      }
+      const body = {};
       
-      await fetch(`${this.url}/set/${key}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+      // ✅ FIX: Don't wrap value in an object
+      // Upstash expects the value directly
+      if (args[0] === 'EX' && args[1]) {
+        // Use SETEX command for setting with expiration
+        const response = await fetch(`${this.url}/setex/${key}/${args[1]}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: value, // Send the value directly as the body
+        });
+      } else {
+        // Regular SET without expiration
+        await fetch(`${this.url}/set/${key}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: value,
+        });
+      }
     } catch (error) {
       console.error('Redis SET error:', error);
     }
