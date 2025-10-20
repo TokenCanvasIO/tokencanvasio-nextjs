@@ -1,18 +1,30 @@
 # Netlify Configuration for the Next.js Backend
-
 [build]
   command = "npm run build"
   publish = ".next"
 
-# This is the correct way to handle large dependencies for Netlify Functions.
-# It should now work because the project structure has been fixed.
+# Configuration for Netlify Functions
 [functions]
+  # Mark firebase-admin as external to avoid bundling it
   external_node_modules = ["firebase-admin"]
+  # Increase function size limit
+  included_files = ["node_modules/firebase-admin/**"]
+  node_bundler = "nft"
 
-# Your headers rule remains the same.
+# Next.js plugin
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# CORS headers for API routes
 [[headers]]
   for = "/api/*"
   [headers.values]
     Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type, Authorization, X-Requested-With"
+
+# Cache static assets
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

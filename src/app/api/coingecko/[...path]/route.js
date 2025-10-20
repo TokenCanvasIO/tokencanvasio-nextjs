@@ -1,95 +1,113 @@
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 
-let db;
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
-// The sanitizeForFirestore function is no longer needed with this new approach.
+const CACHE_DURATION_SECONDS = 300; // 5 minutes
+const COINGECKO_BASE_URL = 'https://pro-api.coingecko.com/api/v3';
 
-const initializeFirebase = () => {
-  const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!firebaseKey) {
-    throw new Error("FATAL ERROR: FIREBASE_SERVICE_ACCOUNT_KEY is not defined.");
+// Simple Redis REST API client
+class RedisCache {
+  constructor(url, token) {
+    this.url = url;
+    this.token = token;
   }
-  
-  const serviceAccount = JSON.parse(firebaseKey);
 
-  if (getApps().length === 0) {
-    initializeApp({
-      credential: cert(serviceAccount),
+  async get(key) {
+    const response = await fetch(`${this.url}/get/${key}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.result;
+  }
+
+  async set(key, value, expirySeconds) {
+    await fetch(`${this.url}/set/${key}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ value, ex: expirySeconds }),
     });
   }
-  db = getFirestore();
-};
-
-const CACHE_DURATION_SECONDS = 300; // Cache for 5 minutes
+}
 
 export async function GET(request, { params }) {
-  try {
-    if (!db) {
-      initializeFirebase();
-    }
-  } catch (error) {
-    console.error("Firebase Initialization Error:", error.message);
-    return NextResponse.json({ error: 'Server configuration error (Firebase)' }, { status: 500 });
-  }
-
+  // Validate environment variables
   const coingeckoApiKey = process.env.COINGECKO_API_KEY;
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
   if (!coingeckoApiKey) {
-    console.error("FATAL ERROR: COINGECKO_API_KEY is not defined.");
-    return NextResponse.json({ error: 'Server configuration error (CoinGecko)' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Server configuration error (CoinGecko)' },
+      { status: 500 }
+    );
   }
 
+  if (!redisUrl || !redisToken) {
+    return NextResponse.json(
+      { error: 'Server configuration error (Redis)' },
+      { status: 500 }
+    );
+  }
+
+  const cache = new RedisCache(redisUrl, redisToken);
   const endpointPath = params.path.join('/');
   const searchParams = request.nextUrl.search;
-
-  const cacheKey = `coingecko_${endpointPath.replace(/\//g, '_')}_${searchParams}`;
-  const cacheRef = db.collection('api_cache').doc(cacheKey);
+  
+  // Generate cache key
+  const cacheKey = `coingecko:${endpointPath}:${searchParams}`;
 
   try {
-    const doc = await cacheRef.get();
-    if (doc.exists) {
-      // --- UPDATED: Read the string from the cache ---
-      const { timestamp, jsonData } = doc.data();
-      const ageSeconds = (Date.now() / 1000) - timestamp.seconds;
-
-      if (ageSeconds < CACHE_DURATION_SECONDS) {
-        // --- UPDATED: Parse the string back into JSON before sending ---
-        const data = JSON.parse(jsonData);
-        const response = NextResponse.json(data);
-        // Version bump for definitive testing
-        response.headers.set('X-Source', 'NextJS-API-V2.2-Cache'); 
-        return response;
-      }
+    // Check cache first
+    const cachedData = await cache.get(cacheKey);
+    
+    if (cachedData) {
+      const response = NextResponse.json(JSON.parse(cachedData));
+      response.headers.set('X-Source', 'Edge-API-V3.0-Cache');
+      return response;
     }
 
-    const apiUrl = `https://pro-api.coingecko.com/api/v3/${endpointPath}${searchParams}`;
+    // Fetch from CoinGecko
+    const apiUrl = `${COINGECKO_BASE_URL}/${endpointPath}${searchParams}`;
     
     const apiResponse = await fetch(apiUrl, {
       headers: { 'x-cg-pro-api-key': coingeckoApiKey },
     });
 
     if (!apiResponse.ok) {
-      const errorData = await apiResponse.json();
+      const errorText = await apiResponse.text();
+      let errorData;
+      
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: 'CoinGecko API error', details: errorText };
+      }
+      
       return NextResponse.json(errorData, { status: apiResponse.status });
     }
 
     const data = await apiResponse.json();
 
-    // --- UPDATED: Convert the entire data object to a string before saving ---
-    // This bypasses Firestore's validation and guarantees the save will work.
-    await cacheRef.set({
-      jsonData: JSON.stringify(data),
-      timestamp: new Date(),
+    // Cache the response (fire and forget)
+    cache.set(cacheKey, JSON.stringify(data), CACHE_DURATION_SECONDS).catch(error => {
+      console.error("Cache write error (non-blocking):", error);
     });
 
     const response = NextResponse.json(data);
-    // Version bump for definitive testing
-    response.headers.set('X-Source', 'NextJS-API-V2.2-Live');
+    response.headers.set('X-Source', 'Edge-API-V3.0-Live');
     return response;
 
   } catch (error) {
     console.error(`Error in CoinGecko proxy for endpoint "${endpointPath}":`, error);
-    return NextResponse.json({ message: 'An internal server error occurred.' }, { status: 500 });
+    
+    return NextResponse.json(
+      { error: 'An internal server error occurred.' },
+      { status: 500 }
+    );
   }
 }
