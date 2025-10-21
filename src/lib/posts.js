@@ -8,7 +8,9 @@ import { notFound } from 'next/navigation';
 import { getBrandConfig } from '@/brandConfig';
 
 export function getSortedPostsData() {
-  const brand = getBrandConfig();
+  // Use environment variable for build-time brand detection
+  const buildHost = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const brand = getBrandConfig(buildHost);
   const brandFolder = brand.key === 'xrp' ? 'xrp' : 'default';
   const postsDirectory = path.join(process.cwd(), 'posts', brandFolder);
   
@@ -35,7 +37,9 @@ export function getSortedPostsData() {
 }
 
 export function getAllPostIds() {
-  const brand = getBrandConfig();
+  // Use environment variable for build-time brand detection
+  const buildHost = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const brand = getBrandConfig(buildHost);
   const brandFolder = brand.key === 'xrp' ? 'xrp' : 'default';
   const postsDirectory = path.join(process.cwd(), 'posts', brandFolder);
   
@@ -51,7 +55,9 @@ export function getAllPostIds() {
 }
 
 export async function getPostData(slug) {
-  const brand = getBrandConfig();
+  // Use environment variable for build-time brand detection
+  const buildHost = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || '';
+  const brand = getBrandConfig(buildHost);
   const brandFolder = brand.key === 'xrp' ? 'xrp' : 'default';
   const fullPath = path.join(process.cwd(), 'posts', brandFolder, `${slug}.md`);
   
