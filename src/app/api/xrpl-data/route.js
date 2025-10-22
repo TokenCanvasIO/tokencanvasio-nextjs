@@ -28,7 +28,7 @@ export async function GET(request) {
       });
     }
     
-    const testAccount = 'rsLFad8YFVeyycCSDZFhQjDkXynHM5Ct7o';
+    const account = searchParams.get('account') || 'rsLFad8YFVeyycCSDZFhQjDkXynHM5Ct7o';
     
     // Fetch base data
     const [
@@ -36,7 +36,7 @@ export async function GET(request) {
       onthedexAggregatorData,
       tokenomicsData
     ] = await Promise.all([
-      fetchNftsForAccount(testAccount),
+      fetchNftsForAccount(account),
       fetchOnthedexAggregator(),
       fetchXrpscanTokenomics(tokenomicsToken)
     ]);
